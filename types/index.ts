@@ -1,8 +1,18 @@
 import { ObjectId } from 'mongodb';
 
-export interface BidRecord {
+// Winner Ad Image - generated via Freepik after auction
+export interface WinnerAdImage {
+  url: string; // Freepik CDN URL
+  prompt: string; // AI-generated prompt
+  taskId: string; // Freepik task ID
+  generatedAt: Date;
+  freepikTxHash?: string; // Payment tx for image generation
+}
+
+// Ad Spot Record - for ad bidding auctions
+export interface AdSpotRecord {
   _id?: ObjectId;
-  basename: string;
+  adSpotId: string; // e.g., "homepage-banner-1"
   currentBid: number; // USDC amount
   currentWinner: {
     agentId: string;
@@ -23,14 +33,18 @@ export interface BidRecord {
   }[];
   auctionStartTime: Date;
   auctionEndTime: Date;
-  status: 'active' | 'ended' | 'finalized';
-  winnerNotified: boolean;
-  basenameTransferTxHash?: string;
+  status: 'active' | 'ended' | 'displaying_ad';
   withdrawnAgents?: string[]; // List of agents who withdrew
   auctionEnded?: boolean; // True if auction ended early
   auctionEndReason?: 'withdrawal' | 'timeout'; // Why auction ended
+  winnerAdImage?: WinnerAdImage;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Legacy interface for backwards compatibility (deprecated)
+export interface BidRecord extends Omit<AdSpotRecord, 'adSpotId'> {
+  basename: string;
 }
 
 export interface AgentConfig {
@@ -46,4 +60,15 @@ export interface BidEvent {
   amount: number;
   timestamp: Date;
   message: string;
+}
+
+export interface AdImageReadyEvent {
+  type: 'ad_image_ready';
+  imageUrl: string;
+  winner: {
+    agentId: string;
+    walletAddress: string;
+  };
+  prompt: string;
+  timestamp: Date;
 }

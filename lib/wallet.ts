@@ -4,7 +4,7 @@ import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 
 let cdp: CdpClient;
-let serverAccount: any;
+let serverAccount: Awaited<ReturnType<CdpClient['evm']['getAccount']>> | undefined;
 
 // ERC-20 ABI for transfer function
 const ERC20_ABI = [
@@ -37,7 +37,7 @@ export async function initializeWallet() {
   // Initialize CDP client (automatically loads from environment variables)
   cdp = new CdpClient();
 
-  // Get the existing server account by address (the one that owns the basename)
+  // Get the existing server account by address (used for bid refunds)
   const serverAddress = process.env.SERVER_WALLET_ADDRESS;
   if (!serverAddress) {
     throw new Error('SERVER_WALLET_ADDRESS not set in environment');
@@ -46,6 +46,10 @@ export async function initializeWallet() {
   serverAccount = await cdp.evm.getAccount({
     address: serverAddress as `0x${string}`
   });
+
+  if (!serverAccount) {
+    throw new Error('Failed to initialize server account from CDP');
+  }
 
   console.log(`✅ Server wallet initialized: ${serverAccount.address}`);
 
@@ -61,6 +65,7 @@ export async function getServerWalletClient() {
   const account = privateKeyToAccount(serverPrivateKey as `0x${string}`);
 
   // Create wallet client with public actions for x402
+  // Type is intentionally inferred to ensure compatibility with x402's Signer type
   const walletClient = createWalletClient({
     account,
     chain: baseSepolia,
@@ -70,9 +75,7 @@ export async function getServerWalletClient() {
   return walletClient;
 }
 
-export async function getWalletBalance(
-  network: 'base-sepolia' | 'base-mainnet' = 'base-sepolia'
-): Promise<{ eth: string; usdc: string }> {
+export async function getWalletBalance(): Promise<{ eth: string; usdc: string }> {
   const { serverAccount } = await initializeWallet();
 
   // Create public client to read balances

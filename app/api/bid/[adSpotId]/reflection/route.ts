@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBidRecord, updateBidRecord } from '@/lib/db';
+import { getAdSpotRecord, updateAdSpotRecord } from '@/lib/db';
 import { broadcastEvent } from '@/lib/events';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ basename: string }> }
+  { params }: { params: Promise<{ adSpotId: string }> }
 ) {
-  const { basename } = await params;
+  const { adSpotId } = await params;
 
   try {
     const body = await request.json();
@@ -20,7 +20,7 @@ export async function POST(
     }
 
     // Get current bid record
-    const bidRecord = await getBidRecord(basename);
+    const bidRecord = await getAdSpotRecord(adSpotId);
 
     if (!bidRecord) {
       return NextResponse.json(
@@ -39,14 +39,14 @@ export async function POST(
         reflection,
       };
 
-      await updateBidRecord(basename, {
+      await updateAdSpotRecord(adSpotId, {
         bidHistory,
       });
 
       console.log(`📝 [${agentId}] Reflection added: ${reflection.substring(0, 100)}...`);
 
       // Broadcast reflection event
-      broadcastEvent(basename, {
+      broadcastEvent(adSpotId, {
         type: 'reflection',
         agentId,
         reflection,

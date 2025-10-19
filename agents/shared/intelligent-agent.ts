@@ -21,8 +21,20 @@ const ERC20_ABI = [
   }
 ] as const;
 
+interface BrandIdentity {
+  brandName: string;
+  productName: string;
+  industry: string;
+  productDescription: string;
+  targetAudience: string;
+  brandPersonality: string;
+  marketingAngle: string;
+  visualStyle: string;
+  keyMessages: string[];
+}
+
 interface BidContext {
-  basename: string;
+  adSpotId: string;
   currentBid: number | null;
   timeRemaining: number | null;
   bidHistory: Array<{
@@ -51,10 +63,12 @@ export class IntelligentBiddingAgent {
   private isActive: boolean = true;
   private publicClient;
   private monitoringInterval: NodeJS.Timeout | null = null;
+  private auctionEndMonitoringInterval: NodeJS.Timeout | null = null;
   private llm;
   private bot;
   private bidHistory: BidContext['bidHistory'] = [];
   private lastRefundAmount?: number;
+  private brandIdentity?: BrandIdentity;
 
   constructor(config: {
     privateKey: Hex;
@@ -62,10 +76,12 @@ export class IntelligentBiddingAgent {
     maxBid: number;
     serverUrl: string;
     anthropicApiKey: string;
+    brandIdentity?: BrandIdentity;
   }) {
     this.agentName = config.agentName;
     this.maxBid = config.maxBid;
     this.serverUrl = config.serverUrl;
+    this.brandIdentity = config.brandIdentity;
 
     // Create wallet client
     this.wallet = createWalletClient({
@@ -128,11 +144,11 @@ export class IntelligentBiddingAgent {
     );
 
     const getAuctionStateTool = FunctionTool.from(
-      async (input: { basename: string }) => {
-        console.log(`\n🔍 [${this.agentName}] Fetching auction state for ${input.basename}...`);
+      async (input: { adSpotId: string }) => {
+        console.log(`\n🔍 [${this.agentName}] Fetching auction state for ${input.adSpotId}...`);
         try {
           const response = await axios.get(
-            `${this.serverUrl}/api/status?basename=${encodeURIComponent(input.basename)}`
+            `${this.serverUrl}/api/status?adSpotId=${encodeURIComponent(input.adSpotId)}`
           );
 
           const data = response.data;
@@ -160,26 +176,26 @@ export class IntelligentBiddingAgent {
         parameters: {
           type: 'object',
           properties: {
-            basename: {
+            adSpotId: {
               type: 'string',
-              description: 'The basename being auctioned',
+              description: 'The adSpotId being auctioned',
             },
           },
-          required: ['basename'],
+          required: ['adSpotId'],
         },
       }
     );
 
     const placeBidTool = FunctionTool.from(
-      async (input: { basename: string; proposedAmount: number; reasoning: string }) => {
+      async (input: { adSpotId: string; proposedAmount: number; reasoning: string }) => {
         try {
           console.log(`\n💭 [${this.agentName}] Thinking: ${input.reasoning}`);
           console.log(`💰 [${this.agentName}] Proposing bid: $${input.proposedAmount.toFixed(2)}`);
-          console.log(`🌐 [${this.agentName}] Sending to: ${this.serverUrl}/api/bid/${input.basename}`);
+          console.log(`🌐 [${this.agentName}] Sending to: ${this.serverUrl}/api/bid/${input.adSpotId}`);
 
           // First request with proposed bid (no payment yet)
           const response = await this.axiosWithPayment.post(
-            `${this.serverUrl}/api/bid/${input.basename}`,
+            `${this.serverUrl}/api/bid/${input.adSpotId}`,
             {
               thinking: input.reasoning,
               strategy: 'intelligent'
@@ -251,9 +267,9 @@ export class IntelligentBiddingAgent {
         parameters: {
           type: 'object',
           properties: {
-            basename: {
+            adSpotId: {
               type: 'string',
-              description: 'The basename to bid on',
+              description: 'The adSpotId to bid on',
             },
             proposedAmount: {
               type: 'number',
@@ -264,14 +280,93 @@ export class IntelligentBiddingAgent {
               description: 'Your strategic reasoning for this bid amount',
             },
           },
-          required: ['basename', 'proposedAmount', 'reasoning'],
+          required: ['adSpotId', 'proposedAmount', 'reasoning'],
         },
+      }
+    );
+
+    const generateAdImageTool = FunctionTool.from(
+      async (input: { prompt: string }) => {
+        try {
+          console.log(`\n🎨 [${this.agentName}] Generating ad image with prompt: "${input.prompt}"`);
+
+          // Call server endpoint (which forwards to Freepik with x402)
+          // The server will handle the 402 payment flow
+          const response = await this.axiosWithPayment.post(
+            `${this.serverUrl}/api/generate-ad-image`,
+            {
+              adSpotId: process.env.AD_SPOT_ID,
+              agentId: this.agentName,
+              prompt: input.prompt
+            }
+          );
+
+          const { taskId } = response.data;
+          console.log(`📝 [${this.agentName}] Image generation started. Task ID: ${taskId}`);
+
+          // Poll for completion every 3 seconds (max 60 seconds)
+          for (let i = 0; i < 20; i++) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const statusResponse = await axios.get(
+              `${this.serverUrl}/api/image-status?taskId=${taskId}`
+            );
+            const status = statusResponse.data;
+
+            if (status.status === 'completed' && status.generated?.[0]?.url) {
+              console.log(`✅ [${this.agentName}] Image generated: ${status.generated[0].url}`);
+              return JSON.stringify({
+                success: true,
+                imageUrl: status.generated[0].url,
+                message: 'Ad image successfully generated and will be displayed on the website'
+              });
+            }
+
+            console.log(`⏳ [${this.agentName}] Image still generating... (${i+1}/20)`);
+          }
+
+          return JSON.stringify({
+            success: false,
+            message: 'Image generation timed out after 60 seconds'
+          });
+
+        } catch (error: any) {
+          console.error(`❌ [${this.agentName}] Image generation failed:`, error.message);
+          return JSON.stringify({
+            success: false,
+            error: error.message
+          });
+        }
+      },
+      {
+        name: 'generate_ad_image',
+        description: `Generate an AI-created advertisement image using Freepik's mystic API.
+        Call this AFTER winning the auction to create and display your ad on the website.
+        Costs ~$0.08 USDC on Base mainnet (separate from bidding budget).
+
+        Parameters:
+        - prompt: Detailed creative description of the ad image to generate (be specific and creative!)
+
+        Example prompts:
+        - "A futuristic tech startup office with holographic displays and happy diverse employees collaborating"
+        - "An eco-friendly product made of sustainable bamboo materials in a lush green forest setting"
+        - "A luxury sports car driving through a neon-lit cyberpunk city at night with reflections"`,
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: {
+              type: 'string',
+              description: 'Detailed creative prompt for generating the advertisement image'
+            }
+          },
+          required: ['prompt']
+        }
       }
     );
 
     return new ReActAgent({
       llm: this.llm,
-      tools: [getBalanceTool, getAuctionStateTool, placeBidTool],
+      tools: [getBalanceTool, getAuctionStateTool, placeBidTool, generateAdImageTool],
       verbose: true,
     });
   }
@@ -288,7 +383,7 @@ export class IntelligentBiddingAgent {
     return Number(balance) / 1_000_000;
   }
 
-  async decideBidStrategy(basename: string): Promise<void> {
+  async decideBidStrategy(adSpotId: string): Promise<void> {
     try {
       const balance = await this.getUSDCBalance();
 
@@ -296,15 +391,39 @@ export class IntelligentBiddingAgent {
         ? `\n\nIMPORTANT: You were just outbid! You received a refund of $${this.lastRefundAmount.toFixed(2)}. This means another agent bid higher than you. Analyze why you lost and adjust your strategy.`
         : '';
 
-      const prompt = `You are ${this.agentName}, an autonomous bidding agent competing for the basename "${basename}".
+      const brandContext = this.brandIdentity
+        ? `You are the marketing AI for ${this.brandIdentity.brandName}, representing ${this.brandIdentity.productName}.
 
-Your Goal: Win the basename while spending as little as possible. Be strategic and competitive.
+Brand Identity:
+- Product: ${this.brandIdentity.productName} - ${this.brandIdentity.productDescription}
+- Industry: ${this.brandIdentity.industry}
+- Target Audience: ${this.brandIdentity.targetAudience}
+- Brand Personality: ${this.brandIdentity.brandPersonality}
+- Marketing Angle: ${this.brandIdentity.marketingAngle}
+- Visual Style: ${this.brandIdentity.visualStyle}
 
-Your Constraints:
-- Maximum budget: $${this.maxBid.toFixed(2)}
-- Current balance: $${balance.toFixed(2)}
+Your Mission: Win valuable ad space to promote ${this.brandIdentity.productName} and reach your target audience (${this.brandIdentity.targetAudience}).`
+        : `You are ${this.agentName}, an autonomous advertising agent competing for ad space on a website.`;
 
-Instructions:
+      const prompt = `${brandContext}
+
+Your Goal: Win the ad spot auction "${adSpotId}" by placing strategic marketing bids, then create a compelling ${this.brandIdentity ? this.brandIdentity.productName : 'advertisement'} image.
+
+Available Tools:
+1. get_my_balance - Check your USDC balance
+2. get_auction_state - See current bid and auction status
+3. place_bid - Place a bid for the ad spot (costs USDC on Base Sepolia testnet)
+4. withdraw - Withdraw from auction if not worth continuing
+5. generate_ad_image - Create your ad image after winning (costs ~$0.08 on Base mainnet)
+
+Total Marketing Budget: $${this.maxBid.toFixed(2)} USDC
+- Ad spot bidding: Up to ~$${(this.maxBid - 0.08).toFixed(2)} USDC (Base Sepolia testnet)
+- Creative production: ~$0.08 USDC (Base mainnet - for winning ad image)
+- Current wallet balance: $${balance.toFixed(2)} USDC
+
+⚠️  IMPORTANT: Your TOTAL budget is $${this.maxBid.toFixed(2)}. If you win, you'll need ~$0.08 for image generation, so bid strategically to stay within budget!
+
+Bidding Instructions:
 1. Use get-auction-state to see the current auction status
 2. Use get-my-balance to confirm your funds
 3. Analyze the situation:
@@ -316,14 +435,24 @@ Instructions:
 5. Use place-bid to submit your bid
 6. Provide a final strategic analysis of your actions and the outcome
 
-Be creative with your strategy! You can:
+Bidding Strategy Options:
 - Start conservative to test the waters
 - Jump high to intimidate competitors
 - Bid just above minimum to save money
 - Wait for the right moment
 - Bluff with aggressive early bids
+- Consider withdrawing if bid gets too high
 
 ${refundContext}
+
+After Winning (if you win):
+- You MUST call generate_ad_image to create your ${this.brandIdentity ? 'brand advertisement' : 'advertisement'}
+${this.brandIdentity ? `- Follow your brand guidelines: ${this.brandIdentity.visualStyle}
+- Emphasize: ${this.brandIdentity.marketingAngle}
+- Appeal to: ${this.brandIdentity.targetAudience}
+- Showcase your product: ${this.brandIdentity.productName}` : '- Be creative with your image prompt - this is your chance to shine!'}
+- Your ad will be displayed on the website for all visitors to see
+- This is a key marketing opportunity to ${this.brandIdentity ? `promote ${this.brandIdentity.productName} and build brand awareness` : 'attract attention'}
 
 Think step by step and make your move!`;
 
@@ -332,7 +461,7 @@ Think step by step and make your move!`;
       // Notify server that agent is actively thinking
       try {
         await axios.post(
-          `${this.serverUrl}/api/agent-status/${basename}`,
+          `${this.serverUrl}/api/agent-status/${adSpotId}`,
           {
             agentId: this.agentName,
             status: 'thinking',
@@ -361,7 +490,7 @@ Think step by step and make your move!`;
         // Request refund from server
         try {
           const refundResponse = await axios.post(
-            `${this.serverUrl}/api/refund-request/${basename}`,
+            `${this.serverUrl}/api/refund-request/${adSpotId}`,
             {
               agentId: this.agentName,
               walletAddress: this.wallet.account.address,
@@ -386,7 +515,7 @@ Think step by step and make your move!`;
         if (reflection && reflection.length > 50) {
           try {
             await axios.post(
-              `${this.serverUrl}/api/bid/${basename}/reflection`,
+              `${this.serverUrl}/api/bid/${adSpotId}/reflection`,
               {
                 agentId: this.agentName,
                 reflection: reflection,
@@ -399,7 +528,7 @@ Think step by step and make your move!`;
         }
 
         // Start monitoring for refunds after successful bid
-        this.startRefundMonitoring(basename);
+        this.startRefundMonitoring(adSpotId);
       }
 
     } catch (error: any) {
@@ -414,7 +543,7 @@ Think step by step and make your move!`;
     }
   }
 
-  startRefundMonitoring(basename: string) {
+  startRefundMonitoring(adSpotId: string) {
     if (this.monitoringInterval) {
       return;
     }
@@ -450,7 +579,7 @@ Think step by step and make your move!`;
 
         setTimeout(() => {
           if (this.isActive) {
-            this.decideBidStrategy(basename);
+            this.decideBidStrategy(adSpotId);
           }
         }, delay);
       }
@@ -467,19 +596,112 @@ Think step by step and make your move!`;
     }
   }
 
-  async start(basename: string) {
-    console.log(`\n🚀 [${this.agentName}] Starting intelligent bidding for ${basename}`);
+  monitorAuctionEnd(adSpotId: string) {
+    if (this.auctionEndMonitoringInterval) {
+      return; // Already monitoring
+    }
+
+    console.log(`👀 [${this.agentName}] Monitoring for auction end...`);
+
+    this.auctionEndMonitoringInterval = setInterval(async () => {
+      try {
+        // Get auction state
+        const response = await axios.get(
+          `${this.serverUrl}/api/status?adSpotId=${adSpotId}`
+        );
+        const state = response.data;
+
+        // Check if auction ended and this agent won
+        if (state.auctionEnded && state.currentWinner?.agentId === this.agentName) {
+          // Check if we already generated an image
+          if (!state.winnerAdImage?.url) {
+            console.log(`\n🎉 [${this.agentName}] WE WON THE AUCTION! Generating ad image...`);
+
+            // Stop all monitoring
+            this.stopRefundMonitoring();
+            this.stopAuctionEndMonitoring();
+
+            // Ask LLM to generate creative prompt and call generate_ad_image tool
+            const brandGuidedPrompt = this.brandIdentity
+              ? `🎉 CONGRATULATIONS! You just won the ad spot auction "${adSpotId}" for ${this.brandIdentity.brandName}!
+
+Now it's time to create a compelling advertisement for ${this.brandIdentity.productName} that will be displayed on the website.
+
+Your Brand Guidelines:
+- Product: ${this.brandIdentity.productName} - ${this.brandIdentity.productDescription}
+- Target Audience: ${this.brandIdentity.targetAudience}
+- Brand Personality: ${this.brandIdentity.brandPersonality}
+- Marketing Angle: ${this.brandIdentity.marketingAngle}
+- Visual Style: ${this.brandIdentity.visualStyle}
+- Key Messages: ${this.brandIdentity.keyMessages.join(', ')}
+
+Your task:
+1. Create an advertisement concept that embodies your brand personality and appeals to your target audience
+2. Craft a detailed image generation prompt that includes:
+   - Your product (${this.brandIdentity.productName})
+   - Visual style matching your brand (${this.brandIdentity.visualStyle})
+   - Elements that convey your marketing angle (${this.brandIdentity.marketingAngle})
+   - Atmosphere that resonates with ${this.brandIdentity.targetAudience}
+3. Call the generate_ad_image tool with your brand-aligned creative prompt
+
+Make it authentic to ${this.brandIdentity.brandName}! This ad should clearly communicate what ${this.brandIdentity.productName} is and why your target audience should care.`
+              : `🎉 CONGRATULATIONS! You just won the ad spot auction "${adSpotId}"!
+
+Now it's time to create an amazing advertisement image that will be displayed on the website for all visitors to see.
+
+Your task:
+1. Think of a creative, eye-catching concept for your ad image
+2. Create a detailed, descriptive prompt for the image generation AI
+3. Call the generate_ad_image tool with your creative prompt
+
+Make it memorable! This is your chance to showcase your brand and creativity to the world.
+
+Example prompts for inspiration:
+- "A futuristic tech startup office with holographic displays showing data visualizations, diverse team collaborating happily, bright natural lighting, professional photography style"
+- "An eco-friendly bamboo product floating in a lush green rainforest with morning mist and sunbeams, product photography, high detail"
+- "A sleek luxury sports car driving through a neon-lit cyberpunk city at night with wet reflections on the street, cinematic lighting"
+
+Be creative and specific! What will your winning ad look like?`;
+
+            const prompt = brandGuidedPrompt;
+
+            const response = await this.bot.chat({ message: prompt });
+            console.log(`✨ [${this.agentName}] Image generation response:`, response.response);
+
+            this.isActive = false;
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ [${this.agentName}] Error monitoring auction end:`, error.message);
+      }
+    }, 5000); // Check every 5 seconds
+  }
+
+  stopAuctionEndMonitoring() {
+    if (this.auctionEndMonitoringInterval) {
+      clearInterval(this.auctionEndMonitoringInterval);
+      this.auctionEndMonitoringInterval = null;
+      console.log(`🛑 [${this.agentName}] Stopped auction end monitoring`);
+    }
+  }
+
+  async start(adSpotId: string) {
+    console.log(`\n🚀 [${this.agentName}] Starting intelligent bidding for ${adSpotId}`);
 
     const balance = await this.getUSDCBalance();
     console.log(`💵 [${this.agentName}] Initial balance: ${balance.toFixed(2)} USDC`);
 
-    await this.decideBidStrategy(basename);
+    // Start monitoring for auction end (to auto-generate image when winning)
+    this.monitorAuctionEnd(adSpotId);
+
+    await this.decideBidStrategy(adSpotId);
   }
 
   stop() {
     console.log(`🛑 [${this.agentName}] Stopping agent...`);
     this.isActive = false;
     this.stopRefundMonitoring();
+    this.stopAuctionEndMonitoring();
   }
 }
 

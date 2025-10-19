@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBidRecord, updateBidRecord } from '@/lib/db';
+import { getAdSpotRecord, updateAdSpotRecord } from '@/lib/db';
 import { sendRefund } from '@/lib/wallet';
 import { broadcastEvent } from '@/lib/events';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ basename: string }> }
+  { params }: { params: Promise<{ adSpotId: string }> }
 ) {
-  const { basename } = await params;
+  const { adSpotId } = await params;
   const body = await request.json();
   const { agentId, walletAddress, reasoning } = body;
 
@@ -19,11 +19,11 @@ export async function POST(
   }
 
   try {
-    const bidRecord = await getBidRecord(basename);
+    const bidRecord = await getAdSpotRecord(adSpotId);
 
     if (!bidRecord) {
       return NextResponse.json(
-        { error: 'No auction found for this basename' },
+        { error: 'No auction found for this adSpotId' },
         { status: 404 }
       );
     }
@@ -57,7 +57,7 @@ export async function POST(
       );
     }
 
-    console.log(`🏳️ [${agentId}] Requesting withdrawal from auction for ${basename}`);
+    console.log(`🏳️ [${agentId}] Requesting withdrawal from auction for ${adSpotId}`);
     console.log(`   Reasoning: ${reasoning || 'No reasoning provided'}`);
 
     // Mark agent as withdrawn
@@ -74,12 +74,12 @@ export async function POST(
     console.log(`✅ Withdrawal refund completed: ${refundTxHash}`);
 
     // Update bid record with withdrawal
-    await updateBidRecord(basename, {
+    await updateAdSpotRecord(adSpotId, {
       withdrawnAgents,
     });
 
     // Broadcast withdrawal event
-    broadcastEvent(basename, {
+    broadcastEvent(adSpotId, {
       type: 'withdrawal',
       agentId,
       amount: refundAmount,
@@ -96,7 +96,7 @@ export async function POST(
       console.log(`🏁 Auction ending - only ${activeAgents} active bidder(s) remaining`);
 
       // Broadcast auction end event
-      broadcastEvent(basename, {
+      broadcastEvent(adSpotId, {
         type: 'auction_ended',
         winner: bidRecord.currentWinner,
         finalBid: bidRecord.currentBid,
@@ -105,7 +105,7 @@ export async function POST(
       });
 
       // Mark auction as ended
-      await updateBidRecord(basename, {
+      await updateAdSpotRecord(adSpotId, {
         auctionEnded: true,
         auctionEndReason: 'withdrawal',
       });
@@ -121,10 +121,11 @@ export async function POST(
         : 'Refund issued. You have withdrawn from the auction.',
     });
 
-  } catch (error: any) {
-    console.error(`❌ Refund request failed:`, error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ Refund request failed:`, errorMessage);
     return NextResponse.json(
-      { error: `Failed to process refund: ${error.message}` },
+      { error: `Failed to process refund: ${errorMessage}` },
       { status: 500 }
     );
   }

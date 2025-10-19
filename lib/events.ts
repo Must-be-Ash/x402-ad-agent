@@ -2,43 +2,54 @@
 
 type EventController = ReadableStreamDefaultController;
 
-// Store active SSE connections per basename
+// Store active SSE connections per ad spot
 const connections = new Map<string, Set<EventController>>();
 
+// Event type definitions
+export type AuctionEventType =
+  | 'thinking'
+  | 'bid_placed'
+  | 'reflection'
+  | 'refund'
+  | 'withdrawal'
+  | 'auction_ended'
+  | 'ad_image_ready'
+  | 'image_generating';
+
 /**
- * Register a new SSE connection for a basename
+ * Register a new SSE connection for an ad spot
  */
-export function registerConnection(basename: string, controller: EventController) {
-  if (!connections.has(basename)) {
-    connections.set(basename, new Set());
+export function registerConnection(adSpotId: string, controller: EventController) {
+  if (!connections.has(adSpotId)) {
+    connections.set(adSpotId, new Set());
   }
-  connections.get(basename)!.add(controller);
-  console.log(`📡 [SSE] Connection registered for "${basename}" (${connections.get(basename)!.size} total)`);
-  console.log(`📡 [SSE] All active basenames:`, Array.from(connections.keys()));
+  connections.get(adSpotId)!.add(controller);
+  console.log(`📡 [SSE] Connection registered for "${adSpotId}" (${connections.get(adSpotId)!.size} total)`);
+  console.log(`📡 [SSE] All active ad spots:`, Array.from(connections.keys()));
 }
 
 /**
  * Unregister an SSE connection
  */
-export function unregisterConnection(basename: string, controller: EventController) {
-  const basenameConnections = connections.get(basename);
-  if (basenameConnections) {
-    basenameConnections.delete(controller);
-    console.log(`📡 SSE connection closed for ${basename} (${basenameConnections.size} remaining)`);
+export function unregisterConnection(adSpotId: string, controller: EventController) {
+  const adSpotConnections = connections.get(adSpotId);
+  if (adSpotConnections) {
+    adSpotConnections.delete(controller);
+    console.log(`📡 SSE connection closed for ${adSpotId} (${adSpotConnections.size} remaining)`);
 
-    if (basenameConnections.size === 0) {
-      connections.delete(basename);
+    if (adSpotConnections.size === 0) {
+      connections.delete(adSpotId);
     }
   }
 }
 
 /**
- * Broadcast an event to all connected clients for a basename
+ * Broadcast an event to all connected clients for an ad spot
  */
-export function broadcastEvent(basename: string, event: any) {
-  const controllers = connections.get(basename);
+export function broadcastEvent(adSpotId: string, event: Record<string, unknown>) {
+  const controllers = connections.get(adSpotId);
   if (!controllers || controllers.size === 0) {
-    console.log(`📡 [WARN] No SSE connections for "${basename}", event not broadcast:`, event.type);
+    console.log(`📡 [WARN] No SSE connections for "${adSpotId}", event not broadcast:`, event.type);
     console.log(`📡 [DEBUG] Available connections:`, Array.from(connections.keys()));
     return;
   }
@@ -46,7 +57,7 @@ export function broadcastEvent(basename: string, event: any) {
   const encoder = new TextEncoder();
   const data = `data: ${JSON.stringify(event)}\n\n`;
 
-  console.log(`📡 [SUCCESS] Broadcasting ${event.type} to ${controllers.size} client(s) for ${basename}`);
+  console.log(`📡 [SUCCESS] Broadcasting ${event.type} to ${controllers.size} client(s) for ${adSpotId}`);
 
   controllers.forEach((controller) => {
     try {
@@ -59,9 +70,9 @@ export function broadcastEvent(basename: string, event: any) {
 }
 
 /**
- * Get the number of active connections for a basename
+ * Get the number of active connections for an ad spot
  */
-export function getConnectionCount(basename: string): number {
-  return connections.get(basename)?.size || 0;
+export function getConnectionCount(adSpotId: string): number {
+  return connections.get(adSpotId)?.size || 0;
 }
 

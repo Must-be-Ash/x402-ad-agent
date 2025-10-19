@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBidRecord, updateBidRecord, addBidToHistory } from '@/lib/db';
+import { getAdSpotRecord, updateAdSpotRecord, addBidToHistory } from '@/lib/db';
 import { sendRefund, getServerWalletClient } from '@/lib/wallet';
 import { calculateCurrentBidPrice, parseBidAmount, AUCTION_DURATION_MS } from '@/lib/x402-config';
 import { verify, settle } from 'x402/facilitator';
-import type { PaymentPayload } from 'x402/types';
+import type { PaymentPayload, ExactEvmPayload, Signer } from 'x402/types';
 import { broadcastEvent } from '@/lib/events';
 
 // Simple in-memory lock to prevent concurrent settlements
-const settlementLocks = new Map<string, Promise<any>>();
+const settlementLocks = new Map<string, Promise<unknown>>();
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ basename: string }> }
+  { params }: { params: Promise<{ adSpotId: string }> }
 ) {
-  const { basename } = await params;
+  const { adSpotId } = await params;
 
   try {
     // Get current bid state from MongoDB
-    const bidRecord = await getBidRecord(basename);
+    const bidRecord = await getAdSpotRecord(adSpotId);
 
     // Check if auction has ended
     if (bidRecord && bidRecord.status === 'ended') {
@@ -30,7 +30,7 @@ export async function POST(
     // Check if auction time has elapsed
     if (bidRecord && bidRecord.auctionEndTime && new Date() > bidRecord.auctionEndTime) {
       // Mark auction as ended
-      await updateBidRecord(basename, { status: 'ended' });
+      await updateAdSpotRecord(adSpotId, { status: 'ended' });
       return NextResponse.json(
         { error: 'Auction time has expired' },
         { status: 410 }
@@ -44,7 +44,7 @@ export async function POST(
     const strategyReasoning = request.headers.get('X-Strategy-Reasoning');
 
     // Parse request body for thinking/strategy
-    let requestBody: any = {};
+    let requestBody: Record<string, unknown> = {};
     try {
       requestBody = await request.json();
     } catch {
@@ -68,11 +68,11 @@ export async function POST(
         }
 
         // Broadcast thinking event
-        broadcastEvent(basename, {
+        broadcastEvent(adSpotId, {
           type: 'thinking',
           agentId,
-          thinking: requestBody.thinking || strategyReasoning,
-          strategy: requestBody.strategy,
+          thinking: (typeof requestBody.thinking === 'string' ? requestBody.thinking : null) || strategyReasoning,
+          strategy: typeof requestBody.strategy === 'string' ? requestBody.strategy : undefined,
           proposedAmount: proposedBid,
           timestamp: new Date().toISOString(),
         });
@@ -122,8 +122,8 @@ export async function POST(
             maxAmountRequired: (maxAmount * 1_000_000).toString(),
             asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // USDC Base Sepolia
             payTo: process.env.SERVER_WALLET_ADDRESS,
-            resource: `${request.nextUrl.origin}/api/bid/${basename}`,
-            description: `Bid on ${basename}`,
+            resource: `${request.nextUrl.origin}/api/bid/${adSpotId}`,
+            description: `Bid on ${adSpotId}`,
             mimeType: 'application/json',
             maxTimeoutSeconds: 60,
             extra: {
@@ -161,8 +161,8 @@ export async function POST(
       maxAmountRequired: (parseBidAmount(requiredPrice) * 1_000_000).toString(),
       asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
       payTo: process.env.SERVER_WALLET_ADDRESS as `0x${string}`,
-      resource: `${request.nextUrl.origin}/api/bid/${basename}`,
-      description: `Bid ${requiredPrice} USDC on ${basename}`,
+      resource: `${request.nextUrl.origin}/api/bid/${adSpotId}`,
+      description: `Bid ${requiredPrice} USDC on ${adSpotId}`,
       mimeType: 'application/json',
       maxTimeoutSeconds: 60,
     };
@@ -170,7 +170,9 @@ export async function POST(
     // Step 1: Verify the payment
     console.log(`🔍 Verifying payment from ${agentId}...`);
     const walletClient = await getServerWalletClient();
-    const verifyResult = await verify(walletClient as any, payment, paymentRequirements);
+    // Type assertion needed due to viem version mismatch between project dependencies and x402
+    // The wallet client is functionally correct but has minor type differences in transaction types
+    const verifyResult = await verify(walletClient as Signer, payment, paymentRequirements);
 
     if (!verifyResult.isValid) {
       console.log(`❌ Payment verification failed: ${verifyResult.invalidReason}`);
@@ -193,7 +195,7 @@ export async function POST(
     }
 
     // Create new settlement promise and store it
-    const settlementPromise = settle(walletClient as any, payment, paymentRequirements);
+    const settlementPromise = settle(walletClient as Signer, payment, paymentRequirements);
     settlementLocks.set(lockKey, settlementPromise);
 
     let settleResult;
@@ -215,7 +217,7 @@ export async function POST(
     console.log(`✅ Payment settled! Tx: ${settleResult.transaction}`);
 
     const payerAddress = verifyResult.payer || 'unknown';
-    const exactPayload = payment.payload as any;
+    const exactPayload = payment.payload as ExactEvmPayload;
     const paidAmount = exactPayload?.authorization?.value || '0';
     const bidAmount = parseFloat(paidAmount) / 1_000_000;
     const transactionHash = settleResult.transaction;
@@ -223,7 +225,7 @@ export async function POST(
     console.log(`💰 Bid accepted from ${agentId}: ${bidAmount} USDC`);
 
     // Broadcast bid placed event
-    broadcastEvent(basename, {
+    broadcastEvent(adSpotId, {
       type: 'bid_placed',
       agentId,
       amount: bidAmount,
@@ -239,30 +241,30 @@ export async function POST(
       new Date(Date.now() + AUCTION_DURATION_MS);
 
     // Update bid record
-    await updateBidRecord(basename, {
-      basename,
+    await updateAdSpotRecord(adSpotId, {
+      adSpotId,
       currentBid: bidAmount,
       currentWinner: {
         agentId,
         walletAddress: payerAddress || 'unknown',
-        externalId: (payment as any).externalId || '',
+        // externalId is not part of PaymentPayload standard but required by DB schema
+        externalId: 'externalId' in payment ? String(payment.externalId) : '',
         timestamp: new Date(),
       },
       status: 'active',
       auctionStartTime: bidRecord?.auctionStartTime || new Date(),
       auctionEndTime,
-      winnerNotified: false,
     });
 
     // Add to bid history with transaction hash and strategy data
-    await addBidToHistory(basename, {
+    await addBidToHistory(adSpotId, {
       agentId,
       walletAddress: payerAddress || 'unknown',
       amount: bidAmount,
       timestamp: new Date(),
       txHash: transactionHash,
-      thinking: requestBody.thinking,
-      strategy: requestBody.strategy,
+      thinking: typeof requestBody.thinking === 'string' ? requestBody.thinking : undefined,
+      strategy: typeof requestBody.strategy === 'string' ? requestBody.strategy : undefined,
       reasoning: strategyReasoning || undefined,
     });
 
@@ -277,15 +279,16 @@ export async function POST(
           console.log(`✅ Refund completed successfully`);
 
           // Broadcast refund event
-          broadcastEvent(basename, {
+          broadcastEvent(adSpotId, {
             type: 'refund',
             agentId: previousWinner.agentId,
             amount: bidRecord.currentBid,
             transactionHash: refundTxHash,
             timestamp: new Date().toISOString(),
           });
-        } catch (error: any) {
-          console.error('❌ Refund failed:', error.message);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error('❌ Refund failed:', errorMessage);
           // Retry once after a delay if it fails
           setTimeout(async () => {
             try {
@@ -294,15 +297,16 @@ export async function POST(
               console.log(`✅ Refund retry successful`);
 
               // Broadcast refund event
-              broadcastEvent(basename, {
+              broadcastEvent(adSpotId, {
                 type: 'refund',
                 agentId: previousWinner.agentId,
                 amount: bidRecord.currentBid,
                 transactionHash: refundTxHash,
                 timestamp: new Date().toISOString(),
               });
-            } catch (retryError: any) {
-              console.error('❌ Refund retry failed:', retryError.message);
+            } catch (retryError) {
+              const retryErrorMessage = retryError instanceof Error ? retryError.message : 'Unknown error';
+              console.error('❌ Refund retry failed:', retryErrorMessage);
             }
           }, 3000);
         }
@@ -314,7 +318,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: `Bid placed: ${bidAmount} USDC`,
+      message: `Bid placed for ad spot: ${bidAmount} USDC`,
       currentWinner: agentId,
       currentBid: bidAmount,
       auctionEndsIn: timeRemaining,
@@ -322,7 +326,8 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('❌ Error processing bid:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Error processing bid:', errorMessage);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

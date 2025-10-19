@@ -5,14 +5,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ basename: string }> }
+  { params }: { params: Promise<{ adSpotId: string }> }
 ) {
-  const { basename } = await params;
+  const { adSpotId } = await params;
 
   const stream = new ReadableStream({
     start(controller) {
       // Register this connection
-      registerConnection(basename, controller);
+      registerConnection(adSpotId, controller);
 
       // Send initial connection message
       const encoder = new TextEncoder();
@@ -26,7 +26,7 @@ export async function GET(
           controller.enqueue(
             encoder.encode(`: heartbeat\n\n`)
           );
-        } catch (error) {
+        } catch {
           clearInterval(heartbeat);
         }
       }, 15000);
@@ -34,7 +34,7 @@ export async function GET(
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat);
-        unregisterConnection(basename, controller);
+        unregisterConnection(adSpotId, controller);
       });
     },
   });

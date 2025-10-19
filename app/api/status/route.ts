@@ -1,24 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBidRecord } from '@/lib/db';
+import { getAdSpotRecord } from '@/lib/db';
 import { AUCTION_DURATION_MS } from '@/lib/x402-config';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const basename = searchParams.get('basename');
+  const adSpotId = searchParams.get('adSpotId');
 
-  if (!basename) {
-    return NextResponse.json({ error: 'Basename is required' }, { status: 400 });
+  if (!adSpotId) {
+    return NextResponse.json({ error: 'adSpotId is required' }, { status: 400 });
   }
 
   try {
-    const bidRecord = await getBidRecord(basename);
+    const bidRecord = await getAdSpotRecord(adSpotId);
 
     if (!bidRecord) {
       return NextResponse.json({
-        basename,
+        adSpotId,
         currentBid: null,
         timeRemaining: null,
         bidHistory: [],
+        auctionEnded: false,
+        winnerAdImage: null,
       });
     }
 
@@ -27,10 +29,12 @@ export async function GET(request: NextRequest) {
     const timeRemaining = Math.max(0, Math.floor((auctionEndTime.getTime() - Date.now()) / 1000));
 
     return NextResponse.json({
-      basename,
+      adSpotId,
       currentBid: bidRecord.currentBid,
       currentWinner: bidRecord.currentWinner,
       timeRemaining,
+      auctionEnded: bidRecord.auctionEnded || false,
+      winnerAdImage: bidRecord.winnerAdImage || null,
       bidHistory: bidRecord.bidHistory.map((bid) => ({
         agentId: bid.agentId,
         amount: bid.amount,
@@ -42,8 +46,9 @@ export async function GET(request: NextRequest) {
         reflection: bid.reflection,
       })),
     });
-  } catch (error: any) {
-    console.error('Error fetching auction status:', error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error fetching auction status:', errorMessage);
     return NextResponse.json(
       { error: 'Failed to fetch auction status' },
       { status: 500 }

@@ -3,9 +3,9 @@ import { broadcastEvent } from '@/lib/events';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ basename: string }> }
+  { params }: { params: Promise<{ adSpotId: string }> }
 ) {
-  const { basename } = await params;
+  const { adSpotId } = await params;
   const body = await request.json();
   const { agentId, status } = body;
 
@@ -19,7 +19,7 @@ export async function POST(
   console.log(`🤖 [${agentId}] Status update: ${status}`);
 
   // Broadcast agent status event
-  broadcastEvent(basename, {
+  broadcastEvent(adSpotId, {
     type: 'agent_status',
     agentId,
     status, // 'thinking', 'idle', etc.

@@ -1,10 +1,17 @@
 'use client';
 
 import { use, useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
+import AdSpotDisplay from '@/app/components/AdSpotDisplay';
+
+interface Winner {
+  agentId: string;
+  address?: string;
+}
 
 interface StreamingMessage {
   id: string;
-  type: 'thinking' | 'bid' | 'reflection' | 'refund' | 'withdrawal' | 'auction_ended';
+  type: 'thinking' | 'bid' | 'reflection' | 'refund' | 'withdrawal' | 'auction_ended' | 'ad_image_ready';
   agentId?: string;
   timestamp: string;
   thinking?: string;
@@ -15,21 +22,17 @@ interface StreamingMessage {
   reflection?: string;
   refundAmount?: number;
   reasoning?: string;
-  winner?: any;
+  winner?: Winner;
   finalBid?: number;
   endReason?: string;
   isLoading?: boolean;
+  imageUrl?: string;
 }
 
-export default function AuctionPageStreaming({ params }: { params: Promise<{ basename: string }> }) {
-  const { basename } = use(params);
+export default function AuctionPageStreaming({ params }: { params: Promise<{ adSpotId: string }> }) {
+  const { adSpotId } = use(params);
   const [messages, setMessages] = useState<StreamingMessage[]>([]);
   const [currentBid, setCurrentBid] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const [agentBalances, setAgentBalances] = useState<Record<string, number>>({
-    'AgentA': 37.27,
-    'AgentB': 15.25,
-  });
   const [agentStatus, setAgentStatus] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +47,7 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
 
     const connect = () => {
       // Connect to SSE stream
-      eventSource = new EventSource(`/api/stream/${encodeURIComponent(basename)}`);
+      eventSource = new EventSource(`/api/stream/${encodeURIComponent(adSpotId)}`);
 
       eventSource.addEventListener('message', (e) => {
         const data = JSON.parse(e.data);
@@ -153,20 +156,30 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
               endReason: data.reason,
             }]);
             break;
+
+          case 'ad_image_ready':
+            // Add ad image ready notification
+            setMessages(prev => [...prev, {
+              id: `ad-image-ready-${Date.now()}`,
+              type: 'ad_image_ready',
+              timestamp: data.timestamp || new Date().toISOString(),
+              agentId: data.winner?.agentId,
+              imageUrl: data.imageUrl,
+            }]);
+            break;
         }
       });
 
       // Also poll for initial state
-      fetch(`/api/status?basename=${encodeURIComponent(basename)}`)
+      fetch(`/api/status?adSpotId=${encodeURIComponent(adSpotId)}`)
         .then(res => res.json())
         .then(data => {
           setCurrentBid(data.currentBid);
-          setTimeRemaining(data.timeRemaining);
 
           // Load existing messages from history
           if (data.bidHistory) {
             const historicalMessages: StreamingMessage[] = [];
-            data.bidHistory.forEach((bid: any) => {
+            data.bidHistory.forEach((bid: { agentId: string; timestamp: string; amount: number; txHash: string; reflection?: string }) => {
               // Only add bid cards for historical data (not thinking bubbles)
               // Thinking bubbles are only shown for live events via SSE
               historicalMessages.push({
@@ -202,30 +215,50 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
         clearTimeout(reconnectTimeout);
       }
     };
-  }, [basename]);
+  }, [adSpotId]);
 
-  const getAgentAvatar = (agentId: string) => {
-    return agentId === 'AgentA' ? '🤖' : '🦾';
+  const getBrandName = (agentId: string) => {
+    if (agentId === 'IceCo' || agentId === 'AgentA') return 'IceCo';
+    if (agentId === 'FizzUp' || agentId === 'AgentB') return 'FizzUp';
+    return agentId;
   };
 
-  const formatTime = (seconds: number | null) => {
-    if (!seconds) return '--:--';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const getBrandLogo = (agentId: string) => {
+    const brandName = getBrandName(agentId);
+    return brandName === 'IceCo' ? '/iceco.png' : '/fizzup.png';
+  };
+
+  const getAgentAvatar = (agentId: string) => {
+    return (
+      <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-[#444444] bg-[#2a2a2a]">
+        <Image
+          src={getBrandLogo(agentId)}
+          alt={getBrandName(agentId)}
+          fill
+          className="object-cover"
+        />
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
+      {/* AD BANNER AT TOP */}
+      <div className="w-full bg-[#2a2a2a] border-b border-[#333333]">
+        <div className="max-w-6xl mx-auto p-4">
+          <AdSpotDisplay adSpotId={adSpotId} />
+        </div>
+      </div>
+
       {/* Header */}
       <div className="bg-[#2a2a2a] border-b border-[#333333] px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-[#ffffff] text-xl font-semibold">
-                {basename}
+                {adSpotId}
               </h1>
-              <p className="text-[#888888] text-sm">Autonomous Basename Auction</p>
+              <p className="text-[#888888] text-sm">Ad Spot Auction</p>
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
@@ -243,14 +276,13 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
       {/* Agent Status Bar */}
       <div className="bg-[#222222] border-b border-[#333333] px-6 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-around">
-          {['AgentA', 'AgentB'].map(agentId => {
-            const balance = agentBalances[agentId] || 0;
-            const status = agentStatus[agentId];
+          {['IceCo', 'FizzUp'].map(agentId => {
+            const status = agentStatus[agentId] || agentStatus[agentId === 'IceCo' ? 'AgentA' : 'AgentB'];
             const isThinking = status === 'thinking';
 
             return (
               <div key={agentId} className="flex items-center gap-3">
-                <div className="text-3xl">{getAgentAvatar(agentId)}</div>
+                {getAgentAvatar(agentId)}
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[#ffffff] font-semibold">{agentId}</span>
@@ -275,7 +307,8 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
             </div>
           ) : (
             messages.map((msg) => {
-              const isAgentA = msg.agentId === 'AgentA';
+              const brandName = getBrandName(msg.agentId || '');
+              const isAgentA = brandName === 'IceCo';
 
               if (msg.type === 'thinking' && msg.agentId) {
                 // Thinking bubble
@@ -283,13 +316,11 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
                   <div key={msg.id} className={`flex ${isAgentA ? 'justify-start' : 'justify-end'}`}>
                     <div className={`flex gap-3 max-w-md ${isAgentA ? 'flex-row' : 'flex-row-reverse'}`}>
                       <div className="flex-shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-[#333333] flex items-center justify-center text-xl">
-                          {getAgentAvatar(msg.agentId)}
-                        </div>
+                        {getAgentAvatar(msg.agentId)}
                       </div>
                       <div className={`flex flex-col ${isAgentA ? 'items-start' : 'items-end'} max-w-lg`}>
                         <div className="text-[#888888] text-xs mb-1 px-2">
-                          {msg.agentId}
+                          {brandName}
                         </div>
                         <div
                           className={`rounded-2xl px-4 py-3 border border-[#444444] ${isAgentA
@@ -302,7 +333,7 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
                             <span>Thinking...</span>
                           </div>
                           <div className="text-[#cccccc] text-sm italic">
-                            "{msg.thinking}"
+                            &quot;{msg.thinking}&quot;
                           </div>
                           {msg.strategy && (
                             <div className="text-[#888888] text-xs mt-2">
@@ -322,13 +353,11 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
                   <div key={msg.id} className={`flex ${isAgentA ? 'justify-start' : 'justify-end'}`}>
                     <div className={`flex gap-3 max-w-md ${isAgentA ? 'flex-row' : 'flex-row-reverse'}`}>
                       <div className="flex-shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-[#333333] flex items-center justify-center text-xl">
-                          {getAgentAvatar(msg.agentId)}
-                        </div>
+                        {getAgentAvatar(msg.agentId)}
                       </div>
                       <div className={`flex flex-col ${isAgentA ? 'items-start' : 'items-end'} max-w-lg`}>
                         <div className="text-[#888888] text-xs mb-1 px-2">
-                          {msg.agentId}
+                          {brandName}
                         </div>
                         <div
                           className={`rounded-2xl px-4 py-3 ${isAgentA
@@ -427,7 +456,7 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
                       </div>
                       {msg.reasoning && (
                         <div className="text-[#888888] text-xs mt-2 italic pl-8">
-                          "{msg.reasoning.substring(0, 200)}..."
+                          &quot;{msg.reasoning.substring(0, 200)}...&quot;
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-2 pl-8 text-xs">
@@ -473,6 +502,25 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ bas
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (msg.type === 'ad_image_ready') {
+                // Ad image ready notification (system message style)
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <div className="bg-[#2a3a3a] border border-[#4a6a6a] rounded-lg px-6 py-4 text-sm text-[#cccccc] max-w-2xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">🎨</span>
+                        <span className="text-[#ffffff] font-semibold">
+                          {msg.agentId} generated their ad image!
+                        </span>
+                      </div>
+                      <div className="text-[#888888] text-xs pl-8">
+                        The winning advertisement is now displayed at the top of the page.
+                      </div>
                     </div>
                   </div>
                 );

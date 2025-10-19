@@ -1,5 +1,5 @@
 import { MongoClient, Db } from 'mongodb';
-import { BidRecord } from '@/types';
+import { AdSpotRecord } from '@/types';
 
 let client: MongoClient;
 let db: Db;
@@ -29,18 +29,19 @@ export async function connectToDatabase() {
   return { client, db };
 }
 
-export async function getBidRecord(basename: string): Promise<BidRecord | null> {
+// Ad Spot functions (new)
+export async function getAdSpotRecord(adSpotId: string): Promise<AdSpotRecord | null> {
   const { db } = await connectToDatabase();
-  return db.collection<BidRecord>('bids').findOne({ basename });
+  return db.collection<AdSpotRecord>('adSpotRecords').findOne({ adSpotId });
 }
 
-export async function updateBidRecord(
-  basename: string,
-  update: Partial<BidRecord>
+export async function updateAdSpotRecord(
+  adSpotId: string,
+  update: Partial<AdSpotRecord>
 ): Promise<void> {
   const { db } = await connectToDatabase();
-  await db.collection<BidRecord>('bids').updateOne(
-    { basename },
+  await db.collection<AdSpotRecord>('adSpotRecords').updateOne(
+    { adSpotId },
     {
       $set: { ...update, updatedAt: new Date() },
       $setOnInsert: { createdAt: new Date() }
@@ -50,12 +51,12 @@ export async function updateBidRecord(
 }
 
 export async function addBidToHistory(
-  basename: string,
-  bid: BidRecord['bidHistory'][0]
+  adSpotId: string,
+  bid: AdSpotRecord['bidHistory'][0]
 ): Promise<void> {
   const { db } = await connectToDatabase();
-  await db.collection<BidRecord>('bids').updateOne(
-    { basename },
+  await db.collection<AdSpotRecord>('adSpotRecords').updateOne(
+    { adSpotId },
     {
       $push: { bidHistory: bid },
       $set: { updatedAt: new Date() }

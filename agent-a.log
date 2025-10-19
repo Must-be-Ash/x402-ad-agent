@@ -1,0 +1,154 @@
+
+> agent-bid@0.1.0 agent:ai:a
+> tsx agents/intelligentAgentA.ts
+
+[dotenv@17.2.3] injecting env (18) from agents/.env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+🧠 AgentA initialized with AI reasoning
+   Wallet: 0xAbF01df9428EaD5418473A7c91244826A3Af23b3
+
+🚀 [AgentA] Starting intelligent bidding for homepage-banner-1
+💵 [AgentA] Initial balance: 51.52 USDC
+👀 [AgentA] Monitoring for auction end...
+
+🧠 [AgentA] Starting AI reasoning...
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+💵 [AgentA] Checking balance...
+✅ [AgentA] Balance retrieved: {"success":true,"data":{"balance":51.52,"maxBid":10}}
+
+💭 [AgentA] Thinking: Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.
+💰 [AgentA] Proposing bid: $2.00
+🌐 [AgentA] Sending to: http://localhost:3000/api/bid/homepage-banner-1
+📡 [AgentA] Server response status: 200
+📡 [AgentA] Server response data: {"success":true,"message":"Bid placed for ad spot: 2 USDC","currentWinner":"AgentA","currentBid":2,"auctionEndsIn":299,"auctionEndTime":"2025-10-19T01:06:54.554Z"}
+✅ [AgentA] Returning success: {"success":true,"data":{"message":"Bid accepted at $2","currentBid":2,"auctionEndsIn":299}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:57","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:53","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:51","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:47","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:44","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:42","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:38","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:33","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:29","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:27","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🎨 [AgentA] Generating ad image with prompt: "A stunning futuristic cityscape at golden hour with floating holographic displays showing web3 and blockchain symbols, featuring sleek geometric patterns and gentle glowing elements. The scene combines cutting-edge technology with warm, welcoming colors, creating an inviting yet innovative atmosphere. Clean, professional composition with subtle animated elements suggesting digital transformation."
+❌ [AgentA] Image generation failed: Request failed with status code 400
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":2,"winningBidder":"AgentA","timeRemaining":"4:16","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":3.5,"winningBidder":"AgentB","timeRemaining":"3:48","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."},{"agentId":"AgentB","amount":3.5,"timestamp":"2025-10-19T01:02:43.262Z","txHash":"0xa959634b2e52e9e4ba10e63f53c60628398a2e185eb138ea5fc25455e5d13ccf","thinking":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids.","strategy":"intelligent","reasoning":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids."}]}}
+
+💭 [AgentA] Thinking: Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed.
+💰 [AgentA] Proposing bid: $5.00
+🌐 [AgentA] Sending to: http://localhost:3000/api/bid/homepage-banner-1
+📡 [AgentA] Server response status: 200
+📡 [AgentA] Server response data: {"success":true,"message":"Bid placed for ad spot: 5 USDC","currentWinner":"AgentA","currentBid":5,"auctionEndsIn":220,"auctionEndTime":"2025-10-19T01:06:54.554Z"}
+✅ [AgentA] Returning success: {"success":true,"data":{"message":"Bid accepted at $5","currentBid":5,"auctionEndsIn":220}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":5,"winningBidder":"AgentA","timeRemaining":"3:34","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."},{"agentId":"AgentB","amount":3.5,"timestamp":"2025-10-19T01:02:43.262Z","txHash":"0xa959634b2e52e9e4ba10e63f53c60628398a2e185eb138ea5fc25455e5d13ccf","thinking":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids.","strategy":"intelligent","reasoning":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids."},{"agentId":"AgentA","amount":5,"timestamp":"2025-10-19T01:03:14.263Z","txHash":"0x98ace10d14ebf687be6510c3c17ed6f79184f5dd47689bd0fe3dda8066e17093","thinking":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed.","strategy":"intelligent","reasoning":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed."}]}}
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+
+🔍 [AgentA] Fetching auction state for undefined...
+❌ [AgentA] Failed to get auction state: Request failed with status code 500
+
+🔍 [AgentA] Fetching auction state for undefined...
+❌ [AgentA] Failed to get auction state: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+❌ [AgentA] Failed to get auction state: Request failed with status code 500
+
+🔍 [AgentA] Fetching auction state for undefined...
+❌ [AgentA] Failed to get auction state: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Request failed with status code 500
+❌ [AgentA] Error monitoring auction end: Error
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+❌ [AgentA] Failed to get auction state: Error
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":5,"winningBidder":"AgentA","timeRemaining":"2:36","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."},{"agentId":"AgentB","amount":3.5,"timestamp":"2025-10-19T01:02:43.262Z","txHash":"0xa959634b2e52e9e4ba10e63f53c60628398a2e185eb138ea5fc25455e5d13ccf","thinking":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids.","strategy":"intelligent","reasoning":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids."},{"agentId":"AgentA","amount":5,"timestamp":"2025-10-19T01:03:14.263Z","txHash":"0x98ace10d14ebf687be6510c3c17ed6f79184f5dd47689bd0fe3dda8066e17093","thinking":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed.","strategy":"intelligent","reasoning":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
+
+🔍 [AgentA] Fetching auction state for homepage-banner-1...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":5,"winningBidder":"AgentA","timeRemaining":"2:26","bidHistory":[{"agentId":"AgentA","amount":2,"timestamp":"2025-10-19T01:01:54.594Z","txHash":"0xe69f9e3ce63d9f344a245a077fffd9609e325f030a4164b7fb6ea0647aae3cf9","thinking":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed.","strategy":"intelligent","reasoning":"Strategic opening bid to establish strong presence while maintaining flexibility for potential bid increases. Amount is significant enough to discourage low-value competitors but preserves budget for competitive responses if needed."},{"agentId":"AgentB","amount":3.5,"timestamp":"2025-10-19T01:02:43.262Z","txHash":"0xa959634b2e52e9e4ba10e63f53c60628398a2e185eb138ea5fc25455e5d13ccf","thinking":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids.","strategy":"intelligent","reasoning":"Making a strong counter-bid that's 75% higher than AgentA's opening bid to demonstrate serious intent and potentially discourage further competition. This amount is still well within our budget limits, leaving room for additional increases if necessary while being significant enough to potentially deter immediate counter-bids."},{"agentId":"AgentA","amount":5,"timestamp":"2025-10-19T01:03:14.263Z","txHash":"0x98ace10d14ebf687be6510c3c17ed6f79184f5dd47689bd0fe3dda8066e17093","thinking":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed.","strategy":"intelligent","reasoning":"Strategic counter-bid with a significant increase to $5.00 to demonstrate strong commitment and potentially discourage further competition. The bid represents a substantial jump while maintaining sufficient budget buffer for potential future increases if needed."}]}}
+
+🔍 [AgentA] Fetching auction state for undefined...
+✅ [AgentA] Auction state retrieved: {"success":true,"data":{"winningBid":0,"winningBidder":null,"timeRemaining":null,"bidHistory":[]}}
