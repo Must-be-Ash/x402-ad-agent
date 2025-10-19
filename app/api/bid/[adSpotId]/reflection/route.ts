@@ -22,7 +22,11 @@ export async function POST(
     // Get current bid record
     const bidRecord = await getAdSpotRecord(adSpotId);
 
+    console.log(`[reflection] adSpotId: ${adSpotId}, agentId: ${agentId}`);
+    console.log(`[reflection] bidRecord exists: ${!!bidRecord}`);
+
     if (!bidRecord) {
+      console.error(`[reflection] ❌ Auction not found for ${adSpotId}`);
       return NextResponse.json(
         { error: 'Auction not found' },
         { status: 404 }
@@ -31,7 +35,11 @@ export async function POST(
 
     // Find the most recent bid from this agent and add reflection
     const bidHistory = bidRecord.bidHistory || [];
+    console.log(`[reflection] bidHistory length: ${bidHistory.length}`);
+    console.log(`[reflection] bidHistory agents: ${bidHistory.map(b => b.agentId).join(', ')}`);
+
     const lastBidIndex = bidHistory.map(b => b.agentId).lastIndexOf(agentId);
+    console.log(`[reflection] lastBidIndex for ${agentId}: ${lastBidIndex}`);
 
     if (lastBidIndex !== -1) {
       bidHistory[lastBidIndex] = {
@@ -56,8 +64,15 @@ export async function POST(
       return NextResponse.json({ success: true });
     }
 
+    console.error(`[reflection] ❌ No bid found for agent ${agentId}`);
+    console.error(`[reflection] Available agents in bidHistory: ${bidHistory.map(b => b.agentId).join(', ') || 'none'}`);
+
     return NextResponse.json(
-      { error: 'No bid found for this agent' },
+      {
+        error: 'No bid found for this agent',
+        agentId,
+        availableAgents: bidHistory.map(b => b.agentId)
+      },
       { status: 404 }
     );
 

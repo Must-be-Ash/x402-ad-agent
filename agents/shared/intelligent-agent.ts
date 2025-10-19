@@ -73,6 +73,8 @@ export class IntelligentBiddingAgent {
   private brandIdentity?: BrandIdentity;
   private currentAdSpotId: string = '';
   private lastBidAmount: number = 0;
+  private isInAIReasoning: boolean = false;
+  private refundPending: boolean = false;
 
   constructor(config: {
     privateKey: Hex;
@@ -467,6 +469,20 @@ export class IntelligentBiddingAgent {
           // Use the provided adSpotId or fall back to current ad spot
           const adSpotId = input.adSpotId || this.currentAdSpotId;
 
+          // BUDGET VALIDATION: Check if bid exceeds maximum budget
+          const maxAllowedBid = this.maxBid - 0.08; // Reserve for image generation
+          if (input.proposedAmount > maxAllowedBid) {
+            console.log(`❌ [${this.agentName}] Bid ${input.proposedAmount.toFixed(2)} exceeds max budget ${maxAllowedBid.toFixed(2)}`);
+            return JSON.stringify({
+              success: false,
+              overBudget: true,
+              proposedAmount: input.proposedAmount,
+              maxAllowedBid: maxAllowedBid,
+              totalBudget: this.maxBid,
+              message: `Your proposed bid of $${input.proposedAmount.toFixed(2)} exceeds your maximum budget of $${maxAllowedBid.toFixed(2)} (total budget: $${this.maxBid}, minus $0.08 for image generation). You must EITHER bid less OR use the withdraw tool to exit the auction.`
+            });
+          }
+
           console.log(`\n💭 [${this.agentName}] Thinking: ${input.reasoning}`);
           console.log(`💰 [${this.agentName}] Proposing bid: $${input.proposedAmount.toFixed(2)}`);
           console.log(`🌐 [${this.agentName}] Sending to: ${this.serverUrl}/api/bid/${adSpotId}`);
@@ -544,7 +560,7 @@ export class IntelligentBiddingAgent {
       },
       {
         name: 'place_bid',
-        description: 'CRITICAL: This tool MUST be executed to actually place a bid. Do NOT simulate or guess the response. This makes a real HTTP request with payment to place your bid on the blockchain. Returns one of: 1) success=true if bid accepted, 2) proposalRejected=true if your amount is too low (you must propose higher), 3) needsNegotiation=true if payment is required. Always check the actual response and adjust your strategy accordingly. The adSpotId parameter is optional - if not provided, uses the current auction.',
+        description: 'CRITICAL: This tool MUST be executed to actually place a bid. Do NOT simulate or guess the response. This makes a real HTTP request with payment to place your bid on the blockchain. Returns one of: 1) success=true if bid accepted, 2) proposalRejected=true if your amount is too low (you MUST bid higher or withdraw), 3) overBudget=true if you exceeded your max budget (you MUST withdraw using the withdraw tool), 4) needsNegotiation=true if payment is required. ALWAYS check the actual response and adjust accordingly. If you get overBudget or cannot afford to continue, you MUST call the withdraw tool to exit gracefully. The adSpotId parameter is optional - if not provided, uses the current auction.',
         parameters: {
           type: 'object',
           properties: {
@@ -597,6 +613,10 @@ export class IntelligentBiddingAgent {
 
   async decideBidStrategy(adSpotId: string): Promise<void> {
     try {
+      // Clear refund pending flag at start of new decision
+      this.refundPending = false;
+      this.isInAIReasoning = true;
+
       const balance = await this.getUSDCBalance();
 
       // START monitoring BEFORE the AI chat begins
@@ -604,7 +624,7 @@ export class IntelligentBiddingAgent {
       await this.startRefundMonitoring(adSpotId);
 
       const refundContext = this.lastRefundAmount
-        ? `\n\nIMPORTANT: You were just outbid! You received a refund of $${this.lastRefundAmount.toFixed(2)}. This means another agent bid higher than you. Analyze why you lost and adjust your strategy.`
+        ? `\n\n🚨 URGENT: You were just outbid! You received a refund of $${this.lastRefundAmount.toFixed(2)} USDC. This means another agent bid higher than you. You MUST respond quickly or risk losing this valuable ad spot! Analyze why you lost and adjust your strategy immediately.`
         : '';
 
       const brandContext = this.brandIdentity
@@ -650,7 +670,16 @@ Bidding Instructions:
    - What's the bidding pattern?
 4. Decide on a strategic bid amount and reasoning
 5. Use place-bid to submit your bid
-6. Provide a final strategic analysis of your actions and the outcome
+6. CRITICAL: Check the response from place-bid:
+   - If proposalRejected=true: Your bid was too low. Bid higher or withdraw.
+   - If overBudget=true: You exceeded your budget. You MUST call withdraw tool immediately.
+   - If success=true: Bid accepted! Provide your strategic analysis.
+7. Provide a final strategic analysis of your actions and the outcome
+
+⚠️  ERROR HANDLING - You MUST respond to these situations:
+- **proposalRejected**: The server rejected your bid as too low. Check minimumRequired and either bid that amount (if within budget) OR call withdraw tool.
+- **overBudget**: You tried to bid more than your max budget ($${(this.maxBid - 0.08).toFixed(2)}). You MUST call the withdraw tool - do NOT try to bid again.
+- **Payment failed**: If the blockchain payment fails, the tool will return an error. Try again with same or adjusted amount.
 
 Bidding Strategy Options:
 - Start conservative to test the waters
@@ -658,7 +687,7 @@ Bidding Strategy Options:
 - Bid just above minimum to save money
 - Wait for the right moment
 - Bluff with aggressive early bids
-- Consider withdrawing if bid gets too high
+- **WITHDRAW** if bid gets too high or exceeds your budget
 
 ${refundContext}
 
@@ -718,6 +747,10 @@ Think step by step and make your move!`;
         lowerResponse.includes('preserve our budget') ||
         lowerResponse.includes('exceeds our budget') ||
         lowerResponse.includes('exceeds our total budget') ||
+        lowerResponse.includes('over budget') ||
+        lowerResponse.includes('overbudget') ||
+        lowerResponse.includes('exceed my budget') ||
+        lowerResponse.includes('beyond my budget') ||
         lowerResponse.includes('decision is to withdraw') ||
         lowerResponse.includes('must withdraw');
 
@@ -764,7 +797,7 @@ Think step by step and make your move!`;
           }
         }
 
-        // Monitoring already started before AI chat (line 604)
+        // Monitoring already started before AI chat (line 610)
         // No need to start again here
       }
 
@@ -776,6 +809,22 @@ Think step by step and make your move!`;
         console.log(`🏁 [${this.agentName}] Auction ended`);
         this.isActive = false;
         this.stopRefundMonitoring();
+      }
+    } finally {
+      // Mark that we're done with AI reasoning
+      this.isInAIReasoning = false;
+
+      // Check if a refund arrived while we were thinking
+      if (this.refundPending && this.isActive) {
+        console.log(`\n⚡ [${this.agentName}] Refund was received during analysis! Immediately re-evaluating...`);
+        this.refundPending = false;
+
+        // Immediately re-evaluate without delay since we were outbid
+        setImmediate(() => {
+          if (this.isActive) {
+            this.decideBidStrategy(this.currentAdSpotId);
+          }
+        });
       }
     }
   }
@@ -826,15 +875,22 @@ Think step by step and make your move!`;
 
           this.stopRefundMonitoring();
 
-          // Wait random delay before AI re-evaluates
-          const delay = Math.random() * (3000 - 1000) + 1000;
-          console.log(`⏳ [${this.agentName}] Thinking for ${Math.floor(delay / 1000)}s...`);
+          // Check if we're currently in AI reasoning (e.g., writing reflection)
+          if (this.isInAIReasoning) {
+            console.log(`   ⚠️  Currently analyzing previous bid - will respond immediately after!`);
+            this.refundPending = true;
+            // The finally block in decideBidStrategy will handle immediate re-evaluation
+          } else {
+            // Not currently thinking, so start new evaluation with small delay
+            const delay = Math.random() * (3000 - 1000) + 1000;
+            console.log(`⏳ [${this.agentName}] Thinking for ${Math.floor(delay / 1000)}s...`);
 
-          setTimeout(() => {
-            if (this.isActive) {
-              this.decideBidStrategy(adSpotId);
-            }
-          }, delay);
+            setTimeout(() => {
+              if (this.isActive) {
+                this.decideBidStrategy(adSpotId);
+              }
+            }, delay);
+          }
         } catch (error) {
           console.error(`❌ [${this.agentName}] Failed to check auction state:`, error);
         }
