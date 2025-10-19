@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
     // Agent's wallet (Base mainnet) handles payment via x402-axios
 
     // Construct webhook URL - use WEBHOOK_URL if set (production), otherwise localhost
-    const webhookBaseUrl = process.env.WEBHOOK_URL || process.env.NEXT_PUBLIC_BASE_URL;
     const webhookUrl = process.env.WEBHOOK_URL
       ? process.env.WEBHOOK_URL  // Use custom webhook URL as-is (e.g., ngrok URL)
       : `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhooks/freepik`;  // Localhost for dev

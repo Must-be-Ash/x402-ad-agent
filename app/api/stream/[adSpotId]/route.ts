@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { registerConnection, unregisterConnection } from '@/lib/events';
+import { getStoredEvents } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,17 +13,35 @@ export async function GET(
   console.log(`📡 [SSE] New connection request for ad spot: "${adSpotId}"`);
 
   const stream = new ReadableStream({
-    start(controller) {
-      // Register this connection
-      registerConnection(adSpotId, controller);
+    async start(controller) {
+      const encoder = new TextEncoder();
 
       // Send initial connection message
-      const encoder = new TextEncoder();
       const connectMsg = { type: 'connected', adSpotId, timestamp: new Date().toISOString() };
       console.log(`📡 [SSE] Sending connection confirmation:`, connectMsg);
       controller.enqueue(
         encoder.encode(`data: ${JSON.stringify(connectMsg)}\n\n`)
       );
+
+      // REPLAY ALL STORED EVENTS - ensures complete observability
+      console.log(`📖 [SSE] Fetching stored events for "${adSpotId}"...`);
+      const storedEvents = await getStoredEvents(adSpotId);
+      console.log(`📖 [SSE] Replaying ${storedEvents.length} stored events to new connection`);
+
+      for (const { event } of storedEvents) {
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
+          );
+        } catch (error) {
+          console.error(`📡 [ERROR] Failed to replay event:`, error);
+        }
+      }
+
+      console.log(`✅ [SSE] Event replay complete, registering for live events`);
+
+      // NOW register for live events
+      registerConnection(adSpotId, controller);
 
       // Send heartbeat every 15 seconds to keep connection alive
       const heartbeat = setInterval(() => {

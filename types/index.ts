@@ -35,8 +35,10 @@ export interface AdSpotRecord {
   auctionEndTime: Date;
   status: 'active' | 'ended' | 'displaying_ad';
   withdrawnAgents?: string[]; // List of agents who withdrew
+  skippedAgents?: string[]; // List of agents who decided not to bid
   auctionEnded?: boolean; // True if auction ended early
-  auctionEndReason?: 'withdrawal' | 'timeout'; // Why auction ended
+  auctionEndReason?: string; // Why auction ended (withdrawal, timeout, no bidders, etc.)
+  winner?: string; // Winner agent ID
   winnerAdImage?: WinnerAdImage;
   createdAt: Date;
   updatedAt: Date;

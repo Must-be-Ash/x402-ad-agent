@@ -5,19 +5,48 @@ import TerminalPanel from '@/app/components/TerminalPanel';
 
 interface StreamingMessage {
   id: string;
-  type: 'scraping_started' | 'scraping_completed' | 'analytics_payment' | 'analytics_received' |
+  type: 'agent_started' | 'scraping_started' | 'scraping_completed' | 'analytics_payment' | 'analytics_received' |
         'analysis_started' | 'analysis_completed' | 'thinking' | 'bid' | 'reflection' |
-        'refund' | 'withdrawal' | 'auction_ended' | 'ad_image_ready' | 'image_generation_update';
+        'refund' | 'withdrawal' | 'agent_skipped' | 'agent_error' | 'auction_ended' | 'ad_image_ready' | 'image_generation_update';
   agentId?: string;
   timestamp: string;
+  // Agent started fields
+  availableSpots?: string[];
+  brandName?: string;
+  productName?: string;
   // Scraping fields
   url?: string;
   contentLength?: number;
+  contentPreview?: string;
+  siteTitle?: string;
   topics?: string[];
+  paymentMethod?: string;
+  expectedCost?: string;
   // Analytics fields
   amount?: string | number;
+  site?: {
+    monthlyVisits: number;
+    dailyAverage: number;
+    avgSessionDuration: string;
+    bounceRate: string;
+  };
   monthlyVisits?: number;
   audience?: string;
+  adSpots?: Array<{
+    id: string;
+    name: string;
+    impressions: number;
+    clickThroughRate: string;
+    estimatedClicks: number;
+    averageBid: string;
+  }>;
+  analysisContext?: {
+    siteTopics: string[];
+    monthlyVisits: number;
+    audience: string;
+    availableSpots: string[];
+    walletBalance: number;
+  };
   // Analysis fields
   shouldBid?: boolean;
   relevanceScore?: number;
@@ -36,6 +65,11 @@ interface StreamingMessage {
   message?: string;
   imageUrl?: string;
   taskId?: string;
+  // Skip fields
+  adSpotId?: string;
+  // Error fields
+  phase?: string;
+  error?: string;
   // Auction end fields
   winner?: { agentId: string; address?: string };
   finalBid?: number;
@@ -47,8 +81,8 @@ export default function AnalyticalAgentsPage() {
   const [messages, setMessages] = useState<StreamingMessage[]>([]);
 
   useEffect(() => {
-    let eventSources: EventSource[] = [];
-    let reconnectTimeouts: NodeJS.Timeout[] = [];
+    const eventSources: EventSource[] = [];
+    const reconnectTimeouts: NodeJS.Timeout[] = [];
 
     const connect = (adSpotId: string) => {
       const eventSource = new EventSource(`/api/stream/${encodeURIComponent(adSpotId)}`);
@@ -60,6 +94,18 @@ export default function AnalyticalAgentsPage() {
         const msgId = `${data.agentId || 'system'}-${data.type}-${Date.now()}-${Math.random()}`;
 
         switch (data.type) {
+          case 'agent_started':
+            setMessages(prev => [...prev, {
+              id: msgId,
+              type: 'agent_started',
+              agentId: data.agentId,
+              timestamp: data.timestamp,
+              availableSpots: data.availableSpots,
+              brandName: data.brandName,
+              productName: data.productName,
+            }]);
+            break;
+
           case 'scraping_started':
             setMessages(prev => [...prev, {
               id: msgId,
@@ -67,6 +113,8 @@ export default function AnalyticalAgentsPage() {
               agentId: data.agentId,
               timestamp: data.timestamp,
               url: data.url,
+              paymentMethod: data.paymentMethod,
+              expectedCost: data.expectedCost,
             }]);
             break;
 
@@ -76,7 +124,10 @@ export default function AnalyticalAgentsPage() {
               type: 'scraping_completed',
               agentId: data.agentId,
               timestamp: data.timestamp,
+              url: data.url,
               contentLength: data.contentLength,
+              contentPreview: data.contentPreview,
+              siteTitle: data.siteTitle,
               topics: data.topics,
             }]);
             break;
@@ -88,6 +139,7 @@ export default function AnalyticalAgentsPage() {
               agentId: data.agentId,
               timestamp: data.timestamp,
               amount: data.amount,
+              paymentMethod: data.paymentMethod,
             }]);
             break;
 
@@ -97,8 +149,9 @@ export default function AnalyticalAgentsPage() {
               type: 'analytics_received',
               agentId: data.agentId,
               timestamp: data.timestamp,
-              monthlyVisits: data.monthlyVisits,
+              site: data.site,
               audience: data.audience,
+              adSpots: data.adSpots,
             }]);
             break;
 
@@ -108,6 +161,7 @@ export default function AnalyticalAgentsPage() {
               type: 'analysis_started',
               agentId: data.agentId,
               timestamp: data.timestamp,
+              analysisContext: data.analysisContext,
             }]);
             break;
 
@@ -195,6 +249,28 @@ export default function AnalyticalAgentsPage() {
             }]);
             break;
 
+          case 'agent_skipped':
+            setMessages(prev => [...prev, {
+              id: msgId,
+              type: 'agent_skipped',
+              agentId: data.agentId,
+              timestamp: data.timestamp,
+              reasoning: data.reasoning,
+              adSpotId: data.adSpotId,
+            }]);
+            break;
+
+          case 'agent_error':
+            setMessages(prev => [...prev, {
+              id: msgId,
+              type: 'agent_error',
+              agentId: data.agentId,
+              timestamp: data.timestamp,
+              phase: data.phase,
+              error: data.error,
+            }]);
+            break;
+
           case 'auction_ended':
             setMessages(prev => [...prev, {
               id: msgId,
@@ -263,13 +339,23 @@ export default function AnalyticalAgentsPage() {
     }> = [];
 
     switch (msg.type) {
+      case 'agent_started':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'info',
+          icon: '🚀',
+          message: 'AGENT STARTED',
+          details: `Brand: ${msg.brandName}\nProduct: ${msg.productName}\nTargeting: ${msg.availableSpots?.join(', ')}`,
+        });
+        break;
+
       case 'scraping_started':
         logs.push({
           timestamp: msg.timestamp,
-          type: 'tool',
-          icon: '🕷️',
-          message: 'SCRAPING WEBSITE',
-          details: `Analyzing: ${msg.url}`,
+          type: 'payment',
+          icon: '💳',
+          message: `x402 PAYMENT: ${msg.expectedCost || 'USDC'}`,
+          details: `Service: Firecrawl Web Scraping\nTarget: ${msg.url}`,
         });
         break;
 
@@ -278,8 +364,8 @@ export default function AnalyticalAgentsPage() {
           timestamp: msg.timestamp,
           type: 'success',
           icon: '✓',
-          message: 'SITE ANALYSIS COMPLETE',
-          details: `Content: ${msg.contentLength?.toLocaleString()} chars\nTopics: ${msg.topics?.join(', ')}`,
+          message: 'SITE DATA RECEIVED',
+          details: `Title: ${msg.siteTitle}\nLength: ${msg.contentLength?.toLocaleString()} chars\nTopics: ${msg.topics?.join(', ')}\n\nPreview:\n${msg.contentPreview}`,
         });
         break;
 
@@ -288,18 +374,22 @@ export default function AnalyticalAgentsPage() {
           timestamp: msg.timestamp,
           type: 'payment',
           icon: '💳',
-          message: 'PAYING FOR ANALYTICS',
-          details: `Cost: ${msg.amount} via x402`,
+          message: `x402 PAYMENT: ${msg.amount}`,
+          details: `Service: Site Analytics API\nMethod: ${msg.paymentMethod}`,
         });
         break;
 
       case 'analytics_received':
+        const adSpotsInfo = msg.adSpots?.map(spot =>
+          `  • ${spot.name}: ${spot.impressions.toLocaleString()} impr/mo, ${spot.clickThroughRate} CTR, ${spot.estimatedClicks.toLocaleString()} clicks, avg bid ${spot.averageBid}`
+        ).join('\n') || '';
+
         logs.push({
           timestamp: msg.timestamp,
           type: 'success',
           icon: '📊',
-          message: 'ANALYTICS RECEIVED',
-          details: `Monthly Visits: ${msg.monthlyVisits?.toLocaleString()}\nAudience: ${msg.audience}`,
+          message: 'FULL ANALYTICS RECEIVED',
+          details: `Monthly Visits: ${msg.site?.monthlyVisits.toLocaleString()}\nDaily Average: ${msg.site?.dailyAverage.toLocaleString()}\nSession Duration: ${msg.site?.avgSessionDuration}\nBounce Rate: ${msg.site?.bounceRate}\nAudience: ${msg.audience}\n\nAd Spots:\n${adSpotsInfo}`,
         });
         break;
 
@@ -308,8 +398,10 @@ export default function AnalyticalAgentsPage() {
           timestamp: msg.timestamp,
           type: 'thinking',
           icon: '🧠',
-          message: 'ANALYZING OPPORTUNITY',
-          details: 'Evaluating relevance, ROI, and budget allocation...',
+          message: 'AI ANALYSIS STARTED',
+          details: msg.analysisContext ?
+            `Analyzing Data:\n• Topics: ${msg.analysisContext.siteTopics.join(', ')}\n• Monthly Visits: ${msg.analysisContext.monthlyVisits.toLocaleString()}\n• Audience: ${msg.analysisContext.audience}\n• Available Spots: ${msg.analysisContext.availableSpots.join(', ')}\n• Wallet Balance: $${msg.analysisContext.walletBalance.toFixed(2)} USDC` :
+            'Evaluating relevance, ROI, and budget allocation...',
         });
         break;
 
@@ -400,6 +492,26 @@ export default function AnalyticalAgentsPage() {
             href: `https://sepolia.basescan.org/tx/${msg.transactionHash}`,
             label: 'View refund transaction'
           } : undefined,
+        });
+        break;
+
+      case 'agent_skipped':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'info',
+          icon: '⊘',
+          message: `SKIPPING AD SPOT: ${msg.adSpotId}`,
+          details: msg.reasoning,
+        });
+        break;
+
+      case 'agent_error':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'error',
+          icon: '❌',
+          message: `ERROR IN ${msg.phase?.toUpperCase()} PHASE`,
+          details: msg.error,
         });
         break;
 

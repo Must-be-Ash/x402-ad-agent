@@ -62,6 +62,18 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
   private availableSpots: string[] = [];
   private tunnelUrl?: string;
 
+  /**
+   * Broadcast event to ALL available ad spots (not just primary)
+   * AWAITS all broadcasts to ensure events are stored before continuing
+   */
+  private async broadcastToAllSpots(event: Record<string, unknown>): Promise<void> {
+    console.log(`📡 [${this.agentName}] Broadcasting ${event.type} to ${this.availableSpots.length} spot(s)...`);
+    await Promise.all(
+      this.availableSpots.map(spotId => broadcastEvent(spotId, event))
+    );
+    console.log(`✅ [${this.agentName}] Event ${event.type} broadcast complete`);
+  }
+
   constructor(config: {
     privateKey: Hex;
     agentName: string;
@@ -86,11 +98,13 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
   private async scrapeWebsite(url: string, adSpotId: string): Promise<SiteAnalysisResult> {
     console.log(`\n🕷️  [${this.agentName}] Scraping ${url} with Firecrawl (via x402)...`);
 
-    // Broadcast scraping started (paying $0.01 USDC via x402)
-    broadcastEvent(adSpotId, {
+    // Broadcast scraping started to ALL spots (paying $0.01 USDC via x402)
+    await this.broadcastToAllSpots({
       type: 'scraping_started',
       agentId: this.agentName,
       url,
+      paymentMethod: 'x402',
+      expectedCost: '$0.01 USDC',
       timestamp: new Date().toISOString(),
     });
 
@@ -119,12 +133,16 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
       console.log(`   📄 Content length: ${markdown.length} chars`);
       console.log(`   🏷️  Topics found: ${topics.join(', ')}`);
 
-      // Broadcast scraping completed
-      broadcastEvent(adSpotId, {
+      // Broadcast scraping completed to ALL spots with content preview
+      const contentPreview = markdown.substring(0, 500) + (markdown.length > 500 ? '...' : '');
+      await this.broadcastToAllSpots({
         type: 'scraping_completed',
         agentId: this.agentName,
+        url,
         contentLength: markdown.length,
+        contentPreview,
         topics,
+        siteTitle: metadata.title || 'Unknown',
         timestamp: new Date().toISOString(),
       });
 
@@ -142,6 +160,16 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
 
     } catch (error: any) {
       console.error(`❌ [${this.agentName}] Firecrawl error:`, error.message);
+
+      // Broadcast error event
+      await this.broadcastToAllSpots({
+        type: 'agent_error',
+        agentId: this.agentName,
+        phase: 'scraping',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+
       throw new Error(`Failed to scrape website: ${error.message}`);
     }
   }
@@ -179,11 +207,12 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
   private async fetchAnalytics(adSpotId: string): Promise<AnalyticsData> {
     console.log(`\n💰 [${this.agentName}] Fetching site analytics (will pay $0.01 USDC via x402)...`);
 
-    // Broadcast analytics payment started
-    broadcastEvent(adSpotId, {
+    // Broadcast analytics payment started to ALL spots
+    await this.broadcastToAllSpots({
       type: 'analytics_payment',
       agentId: this.agentName,
       amount: '0.01 USDC',
+      paymentMethod: 'x402',
       timestamp: new Date().toISOString(),
     });
 
@@ -197,12 +226,27 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
       console.log(`   👥 Monthly visits: ${response.data.site.monthlyVisits.toLocaleString()}`);
       console.log(`   🎯 Audience: ${response.data.demographics.audienceType}`);
 
-      // Broadcast analytics received
-      broadcastEvent(adSpotId, {
+      const analyticsData = response.data as AnalyticsData;
+
+      // Broadcast analytics received with FULL data to ALL spots
+      await this.broadcastToAllSpots({
         type: 'analytics_received',
         agentId: this.agentName,
-        monthlyVisits: response.data.site.monthlyVisits,
-        audience: response.data.demographics.audienceType,
+        site: {
+          monthlyVisits: analyticsData.site.monthlyVisits,
+          dailyAverage: analyticsData.site.dailyAverage,
+          avgSessionDuration: analyticsData.site.avgSessionDuration,
+          bounceRate: analyticsData.site.bounceRate,
+        },
+        audience: analyticsData.demographics.audienceType,
+        adSpots: Object.entries(analyticsData.adSpots).map(([spotId, spot]) => ({
+          id: spotId,
+          name: spot.name,
+          impressions: spot.impressions,
+          clickThroughRate: spot.clickThroughRate,
+          estimatedClicks: spot.estimatedMonthlyClicks,
+          averageBid: spot.averageBid,
+        })),
         timestamp: new Date().toISOString(),
       });
 
@@ -210,6 +254,16 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
 
     } catch (error: any) {
       console.error(`❌ [${this.agentName}] Analytics fetch error:`, error.message);
+
+      // Broadcast error event
+      await this.broadcastToAllSpots({
+        type: 'agent_error',
+        agentId: this.agentName,
+        phase: 'analytics',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+
       throw new Error(`Failed to fetch analytics: ${error.message}`);
     }
   }
@@ -220,18 +274,25 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
   private async analyzeAndDecide(adSpotId: string): Promise<BudgetDecision> {
     console.log(`\n🧠 [${this.agentName}] Analyzing opportunity with AI...`);
 
-    // Broadcast analysis started
-    broadcastEvent(adSpotId, {
-      type: 'analysis_started',
-      agentId: this.agentName,
-      timestamp: new Date().toISOString(),
-    });
-
     if (!this.siteAnalysis || !this.analyticsData) {
       throw new Error('Missing site analysis or analytics data');
     }
 
     const balance = await this.getUSDCBalance();
+
+    // Broadcast analysis started with context data to ALL spots
+    await this.broadcastToAllSpots({
+      type: 'analysis_started',
+      agentId: this.agentName,
+      analysisContext: {
+        siteTopics: this.siteAnalysis.topics,
+        monthlyVisits: this.analyticsData.site.monthlyVisits,
+        audience: this.analyticsData.demographics.audienceType,
+        availableSpots: Object.keys(this.analyticsData.adSpots),
+        walletBalance: balance,
+      },
+      timestamp: new Date().toISOString(),
+    });
 
     const analysisPrompt = `You are ${this.agentName}, a marketing AI for ${this.brandIdentity?.brandName}.
 
@@ -350,8 +411,8 @@ Return ONLY the JSON object above. Do not include any other text.`;
         console.log(`   📋 Strategy: ${decision.strategy}`);
       }
 
-      // Broadcast analysis completed
-      broadcastEvent(adSpotId, {
+      // Broadcast analysis completed to ALL spots
+      await this.broadcastToAllSpots({
         type: 'analysis_completed',
         agentId: this.agentName,
         shouldBid: decision.shouldBid,
@@ -368,6 +429,15 @@ Return ONLY the JSON object above. Do not include any other text.`;
     } catch (error: any) {
       console.error(`❌ [${this.agentName}] AI analysis error:`, error.message);
 
+      // Broadcast error event
+      await this.broadcastToAllSpots({
+        type: 'agent_error',
+        agentId: this.agentName,
+        phase: 'analysis',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+
       // Fallback decision: don't bid if analysis fails
       return {
         shouldBid: false,
@@ -376,6 +446,36 @@ Return ONLY the JSON object above. Do not include any other text.`;
         budgetPerSpot: {},
         strategy: 'No bidding due to analysis failure'
       };
+    }
+  }
+
+  /**
+   * Notify server that agent is skipping a spot
+   */
+  private async notifySkippedSpot(adSpotId: string, reasoning: string): Promise<void> {
+    try {
+      console.log(`🚫 [${this.agentName}] Notifying server about skipping "${adSpotId}"`);
+
+      const response = await this.axiosWithPayment.post(
+        `${this.serverUrl}/api/skip-spot/${adSpotId}`,
+        {
+          agentId: this.agentName,
+          reasoning: reasoning,
+          timestamp: new Date().toISOString()
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Agent-ID': this.agentName,
+          }
+        }
+      );
+
+      if (response.status === 200) {
+        console.log(`✅ [${this.agentName}] Server notified about skipping "${adSpotId}"`);
+      }
+    } catch (error: any) {
+      console.error(`❌ [${this.agentName}] Failed to notify skip for "${adSpotId}":`, error.message);
     }
   }
 
@@ -394,6 +494,16 @@ Return ONLY the JSON object above. Do not include any other text.`;
     // Set current ad spot for AI tools to use
     this.currentAdSpotId = primarySpot;
 
+    // Broadcast agent started event to ALL spots
+    await this.broadcastToAllSpots({
+      type: 'agent_started',
+      agentId: this.agentName,
+      availableSpots: adSpotIds,
+      brandName: this.brandIdentity?.brandName,
+      productName: this.brandIdentity?.productName,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       // Phase 1: Scrape the site
       // Use tunnel URL if available (for Firecrawl to access localhost), otherwise use serverUrl
@@ -407,7 +517,18 @@ Return ONLY the JSON object above. Do not include any other text.`;
       // Phase 3: AI analysis and decision
       this.budgetDecision = await this.analyzeAndDecide(primarySpot);
 
-      // Phase 4: Start bidding if decision is positive
+      // Phase 4: Handle skipped spots and start bidding if decision is positive
+      const targetSpots = this.budgetDecision?.targetSpots || [];
+      const skippedSpots = adSpotIds.filter(spot => !targetSpots.includes(spot));
+
+      // Notify server about ANY skipped spots
+      if (skippedSpots.length > 0) {
+        console.log(`\n🚫 [${this.agentName}] Skipping ${skippedSpots.length} spot(s): ${skippedSpots.join(', ')}`);
+        for (const skippedSpot of skippedSpots) {
+          await this.notifySkippedSpot(skippedSpot, this.budgetDecision.reasoning);
+        }
+      }
+
       if (this.budgetDecision.shouldBid && this.budgetDecision.targetSpots.length > 0) {
         console.log(`\n✅ [${this.agentName}] Analysis complete - Starting bidding phase!`);
 
@@ -422,7 +543,7 @@ Return ONLY the JSON object above. Do not include any other text.`;
         await this.startBidding(firstSpot);
 
       } else {
-        console.log(`\n⛔ [${this.agentName}] Decision: NOT BIDDING`);
+        console.log(`\n⛔ [${this.agentName}] Decision: NOT BIDDING on ANY spots`);
         console.log(`   Reason: ${this.budgetDecision.reasoning}`);
       }
 

@@ -1,11 +1,17 @@
 // In-memory task store for webhook results
 // In production, this would use MongoDB/Redis
 
+interface GeneratedImage {
+  base64?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+
 interface TaskResult {
   task_id: string;
   status: string;
   imageUrl?: string;
-  generated?: any[];
+  generated?: GeneratedImage[];
   timestamp: string;
   error?: string;
 }

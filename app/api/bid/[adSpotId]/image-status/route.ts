@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { broadcastEvent } from '@/lib/events';
 import { updateAdSpotRecord, getAdSpotRecord } from '@/lib/db';
+import type { WinnerAdImage } from '@/types';
 
 export async function POST(
   request: NextRequest,
@@ -22,11 +23,16 @@ export async function POST(
       if (record && record.currentWinner?.agentId === agentId) {
         console.log(`[image-status] Saving image URL to database for ${adSpotId}`);
 
+        const updatedImage: WinnerAdImage = {
+          ...record.winnerAdImage!,
+          url: imageUrl,
+          generatedAt: new Date(),
+        };
+
         await updateAdSpotRecord(adSpotId, {
-          'winnerAdImage.url': imageUrl,
-          'winnerAdImage.generatedAt': new Date(),
-          'status': 'displaying_ad'
-        } as any);
+          winnerAdImage: updatedImage,
+          status: 'displaying_ad'
+        });
 
         console.log(`✅ [image-status] Image URL saved to database`);
 

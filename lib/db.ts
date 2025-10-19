@@ -63,3 +63,40 @@ export async function addBidToHistory(
     }
   );
 }
+
+// Event storage for complete observability
+export interface StoredEvent {
+  adSpotId: string;
+  event: Record<string, unknown>;
+  timestamp: Date;
+}
+
+export async function storeEvent(adSpotId: string, event: Record<string, unknown>): Promise<void> {
+  try {
+    const { db } = await connectToDatabase();
+    await db.collection<StoredEvent>('analyticalEvents').insertOne({
+      adSpotId,
+      event,
+      timestamp: new Date()
+    });
+    console.log(`💾 [DB] ✅ Stored event for ${adSpotId}:`, event.type);
+  } catch (error) {
+    // Log error but don't throw - we don't want to break the event flow
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`💾 [DB] ❌ Failed to store event for ${adSpotId}:`, event.type, errorMessage);
+  }
+}
+
+export async function getStoredEvents(adSpotId: string, since?: Date): Promise<StoredEvent[]> {
+  const { db } = await connectToDatabase();
+  const query: Record<string, unknown> = { adSpotId };
+  if (since) {
+    query.timestamp = { $gte: since };
+  }
+  const events = await db.collection<StoredEvent>('analyticalEvents')
+    .find(query)
+    .sort({ timestamp: 1 })
+    .toArray();
+  console.log(`📖 [DB] Retrieved ${events.length} stored events for ${adSpotId}`);
+  return events;
+}
