@@ -1,8 +1,8 @@
 'use client';
 
-import { use, useEffect, useState, useRef } from 'react';
-import Image from 'next/image';
+import { use, useEffect, useState, useMemo } from 'react';
 import AdSpotDisplay from '@/app/components/AdSpotDisplay';
+import TerminalPanel from '@/app/components/TerminalPanel';
 
 interface Winner {
   agentId: string;
@@ -11,7 +11,7 @@ interface Winner {
 
 interface StreamingMessage {
   id: string;
-  type: 'thinking' | 'bid' | 'reflection' | 'refund' | 'withdrawal' | 'auction_ended' | 'ad_image_ready';
+  type: 'thinking' | 'bid' | 'reflection' | 'refund' | 'withdrawal' | 'auction_ended' | 'ad_image_ready' | 'image_generation_update';
   agentId?: string;
   timestamp: string;
   thinking?: string;
@@ -27,19 +27,15 @@ interface StreamingMessage {
   endReason?: string;
   isLoading?: boolean;
   imageUrl?: string;
+  status?: string; // For image generation: 'started', 'progress', 'completed', 'failed'
+  message?: string; // For image generation status messages
+  taskId?: string;
 }
 
 export default function AuctionPageStreaming({ params }: { params: Promise<{ adSpotId: string }> }) {
   const { adSpotId } = use(params);
   const [messages, setMessages] = useState<StreamingMessage[]>([]);
   const [currentBid, setCurrentBid] = useState<number | null>(null);
-  const [agentStatus, setAgentStatus] = useState<Record<string, string>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -54,15 +50,10 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
 
         switch (data.type) {
           case 'agent_status':
-            // Update agent status (for shimmer display)
-            setAgentStatus(prev => ({
-              ...prev,
-              [data.agentId]: data.status,
-            }));
+            // No longer needed - we show everything in terminal
             break;
 
           case 'thinking':
-            // Add thinking bubble and clear agent status
             setMessages(prev => [...prev, {
               id: `${data.agentId}-thinking-${Date.now()}`,
               type: 'thinking',
@@ -72,11 +63,6 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
               strategy: data.strategy,
               proposedAmount: data.proposedAmount,
             }]);
-            // Clear thinking status since we now have the actual thinking bubble
-            setAgentStatus(prev => ({
-              ...prev,
-              [data.agentId]: 'idle',
-            }));
             break;
 
           case 'bid_placed':
@@ -167,6 +153,20 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
               imageUrl: data.imageUrl,
             }]);
             break;
+
+          case 'image_generation_update':
+            // Add image generation status update
+            setMessages(prev => [...prev, {
+              id: `image-gen-${Date.now()}`,
+              type: 'image_generation_update',
+              timestamp: data.timestamp || new Date().toISOString(),
+              agentId: data.agentId,
+              status: data.status,
+              message: data.message,
+              imageUrl: data.imageUrl,
+              taskId: data.taskId,
+            }]);
+            break;
         }
       });
 
@@ -223,23 +223,184 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
     return agentId;
   };
 
-  const getBrandLogo = (agentId: string) => {
-    const brandName = getBrandName(agentId);
-    return brandName === 'IceCo' ? '/iceco.png' : '/fizzup.png';
+  // Convert streaming messages to terminal logs
+  const messageToTerminalLog = (msg: StreamingMessage) => {
+    const logs: Array<{
+      timestamp: string;
+      type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
+      icon: string;
+      message: string;
+      details?: string;
+      link?: { href: string; label: string };
+    }> = [];
+
+    switch (msg.type) {
+      case 'thinking':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'thinking',
+          icon: '🧠',
+          message: 'THINKING',
+          details: msg.thinking,
+        });
+        if (msg.strategy) {
+          logs.push({
+            timestamp: msg.timestamp,
+            type: 'info',
+            icon: '📋',
+            message: 'STRATEGY',
+            details: msg.strategy,
+          });
+        }
+        if (msg.proposedAmount) {
+          logs.push({
+            timestamp: msg.timestamp,
+            type: 'info',
+            icon: '💭',
+            message: `PROPOSED BID: $${msg.proposedAmount.toFixed(2)} USDC`,
+          });
+        }
+        break;
+
+      case 'bid':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'payment',
+          icon: '💳',
+          message: 'INITIATING x402 PAYMENT',
+          details: `Amount: $${msg.amount?.toFixed(2)} USDC`,
+        });
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'success',
+          icon: '✓',
+          message: `BID PLACED: $${msg.amount?.toFixed(2)} USDC`,
+          link: msg.transactionHash ? {
+            href: `https://sepolia.basescan.org/tx/${msg.transactionHash}`,
+            label: 'View transaction on Basescan'
+          } : undefined,
+        });
+        if (msg.reflection) {
+          logs.push({
+            timestamp: msg.timestamp,
+            type: 'info',
+            icon: '📊',
+            message: 'POST-BID ANALYSIS',
+            details: msg.reflection,
+          });
+        }
+        break;
+
+      case 'refund':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'payment',
+          icon: '💸',
+          message: `REFUND RECEIVED: $${msg.refundAmount?.toFixed(2)} USDC`,
+          details: 'Outbid by competitor. Re-evaluating strategy...',
+          link: msg.transactionHash ? {
+            href: `https://sepolia.basescan.org/tx/${msg.transactionHash}`,
+            label: 'View refund transaction'
+          } : undefined,
+        });
+        break;
+
+      case 'withdrawal':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'info',
+          icon: '🏳️',
+          message: 'WITHDRAWING FROM AUCTION',
+          details: msg.reasoning,
+          link: msg.transactionHash ? {
+            href: `https://sepolia.basescan.org/tx/${msg.transactionHash}`,
+            label: 'View refund transaction'
+          } : undefined,
+        });
+        break;
+
+      case 'image_generation_update':
+        // Image generation progress updates
+        const statusIcons = {
+          started: '🎨',
+          progress: '⏳',
+          completed: '✅',
+          failed: '❌'
+        };
+        const statusTypes = {
+          started: 'info' as const,
+          progress: 'tool' as const,
+          completed: 'success' as const,
+          failed: 'error' as const
+        };
+        logs.push({
+          timestamp: msg.timestamp,
+          type: statusTypes[msg.status as keyof typeof statusTypes] || 'info',
+          icon: statusIcons[msg.status as keyof typeof statusIcons] || '🎨',
+          message: msg.status === 'started' ? 'GENERATING AD IMAGE' :
+                   msg.status === 'progress' ? 'IMAGE GENERATION IN PROGRESS' :
+                   msg.status === 'completed' ? 'AD IMAGE GENERATED' :
+                   'IMAGE GENERATION FAILED',
+          details: msg.message,
+        });
+        break;
+
+      case 'ad_image_ready':
+        logs.push({
+          timestamp: msg.timestamp,
+          type: 'success',
+          icon: '🎨',
+          message: 'AD IMAGE READY',
+          details: 'Creative assets ready. Ad is now live!',
+        });
+        break;
+
+      case 'auction_ended':
+        // Auction ended messages appear in both terminals
+        logs.push({
+          timestamp: msg.timestamp,
+          type: msg.winner?.agentId === msg.agentId ? 'success' : 'info',
+          icon: msg.winner?.agentId === msg.agentId ? '🏆' : '🏁',
+          message: msg.winner?.agentId === msg.agentId ? 'AUCTION WON!' : 'AUCTION ENDED',
+          details: `${msg.endReason}\nFinal Bid: $${msg.finalBid?.toFixed(2)}`,
+        });
+        break;
+    }
+
+    return logs;
   };
 
-  const getAgentAvatar = (agentId: string) => {
-    return (
-      <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-[#444444] bg-[#2a2a2a]">
-        <Image
-          src={getBrandLogo(agentId)}
-          alt={getBrandName(agentId)}
-          fill
-          className="object-cover"
-        />
-      </div>
-    );
-  };
+  // Split messages by agent
+  const { iceCoLogs, fizzUpLogs } = useMemo(() => {
+    const iceCoLogs: Array<{
+      timestamp: string;
+      type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
+      icon: string;
+      message: string;
+      details?: string;
+      link?: { href: string; label: string };
+    }> = [];
+    const fizzUpLogs: Array<{
+      timestamp: string;
+      type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
+      icon: string;
+      message: string;
+      details?: string;
+      link?: { href: string; label: string };
+    }> = [];
+
+    messages.forEach(msg => {
+      const brandName = getBrandName(msg.agentId || '');
+      if (brandName === 'IceCo' || msg.type === 'auction_ended') {
+        iceCoLogs.push(...messageToTerminalLog(msg));
+      }
+      if (brandName === 'FizzUp' || msg.type === 'auction_ended') {
+        fizzUpLogs.push(...messageToTerminalLog(msg));
+      }
+    });
+
+    return { iceCoLogs, fizzUpLogs };
+  }, [messages]);
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
@@ -273,264 +434,26 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
         </div>
       </div>
 
-      {/* Agent Status Bar */}
-      <div className="bg-[#222222] border-b border-[#333333] px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-around">
-          {['IceCo', 'FizzUp'].map(agentId => {
-            const status = agentStatus[agentId] || agentStatus[agentId === 'IceCo' ? 'AgentA' : 'AgentB'];
-            const isThinking = status === 'thinking';
+      {/* Dual Terminal View */}
+      <div className="flex-1 overflow-hidden px-6 py-6">
+        <div className="max-w-7xl mx-auto h-full">
+          <div className="grid grid-cols-2 gap-4 h-full">
+            {/* IceCo Terminal */}
+            <TerminalPanel
+              brandName="IceCo"
+              logs={iceCoLogs}
+              color="blue"
+              logoPath="/iceco.png"
+            />
 
-            return (
-              <div key={agentId} className="flex items-center gap-3">
-                {getAgentAvatar(agentId)}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#ffffff] font-semibold">{agentId}</span>
-                    {isThinking && (
-                      <span className="text-[#666666] text-xs animate-pulse">🧠 thinking...</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Messages Container (Streaming) */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {messages.length === 0 ? (
-            <div className="text-center text-[#666666] py-12">
-              <div className="text-4xl mb-4">💬</div>
-              <p>Waiting for agents to start bidding...</p>
-            </div>
-          ) : (
-            messages.map((msg) => {
-              const brandName = getBrandName(msg.agentId || '');
-              const isAgentA = brandName === 'IceCo';
-
-              if (msg.type === 'thinking' && msg.agentId) {
-                // Thinking bubble
-                return (
-                  <div key={msg.id} className={`flex ${isAgentA ? 'justify-start' : 'justify-end'}`}>
-                    <div className={`flex gap-3 max-w-md ${isAgentA ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <div className="flex-shrink-0">
-                        {getAgentAvatar(msg.agentId)}
-                      </div>
-                      <div className={`flex flex-col ${isAgentA ? 'items-start' : 'items-end'} max-w-lg`}>
-                        <div className="text-[#888888] text-xs mb-1 px-2">
-                          {brandName}
-                        </div>
-                        <div
-                          className={`rounded-2xl px-4 py-3 border border-[#444444] ${isAgentA
-                            ? 'bg-[#2a2a2a] rounded-tl-sm'
-                            : 'bg-[#2a2a2a] rounded-tr-sm'
-                            }`}
-                        >
-                          <div className="text-[#888888] text-xs mb-1 flex items-center gap-1">
-                            <span>💭</span>
-                            <span>Thinking...</span>
-                          </div>
-                          <div className="text-[#cccccc] text-sm italic">
-                            &quot;{msg.thinking}&quot;
-                          </div>
-                          {msg.strategy && (
-                            <div className="text-[#888888] text-xs mt-2">
-                              Strategy: <span className="text-[#aaaaaa]">{msg.strategy}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.type === 'bid' && msg.agentId) {
-                // Bid card
-                return (
-                  <div key={msg.id} className={`flex ${isAgentA ? 'justify-start' : 'justify-end'}`}>
-                    <div className={`flex gap-3 max-w-md ${isAgentA ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <div className="flex-shrink-0">
-                        {getAgentAvatar(msg.agentId)}
-                      </div>
-                      <div className={`flex flex-col ${isAgentA ? 'items-start' : 'items-end'} max-w-lg`}>
-                        <div className="text-[#888888] text-xs mb-1 px-2">
-                          {brandName}
-                        </div>
-                        <div
-                          className={`rounded-2xl px-4 py-3 ${isAgentA
-                            ? 'bg-[#333333] rounded-tl-sm'
-                            : 'bg-[#444444] rounded-tr-sm'
-                            }`}
-                        >
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-[#cccccc] text-sm">Bid placed:</span>
-                            <span className="text-[#ffffff] text-2xl font-bold">
-                              ${msg.amount?.toFixed(2)}
-                            </span>
-                            <span className="text-[#888888] text-xs">USDC</span>
-                          </div>
-
-                          {msg.transactionHash && (
-                            <a
-                              href={`https://sepolia.basescan.org/tx/${msg.transactionHash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#666666] hover:text-[#888888] text-xs underline mt-2 inline-block"
-                            >
-                              View on Basescan →
-                            </a>
-                          )}
-
-                          <div className="text-[#666666] text-xs mt-2">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </div>
-                        </div>
-
-                        {/* Reflection - appears after bid */}
-                        {msg.isLoading ? (
-                          <div className={`mt-2 rounded-2xl px-4 py-3 bg-[#2a2a2a] border border-[#333333] ${isAgentA ? 'rounded-tl-sm' : 'rounded-tr-sm'
-                            } max-w-lg`}>
-                            <div className="flex items-center gap-2 text-[#666666] text-xs mb-2">
-                              <span className="animate-pulse">💭</span>
-                              <span className="animate-pulse">Analyzing outcome...</span>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="h-3 bg-[#333333] rounded animate-pulse w-full"></div>
-                              <div className="h-3 bg-[#333333] rounded animate-pulse w-5/6"></div>
-                              <div className="h-3 bg-[#333333] rounded animate-pulse w-4/6"></div>
-                            </div>
-                          </div>
-                        ) : msg.reflection && (
-                          <div className={`mt-2 rounded-2xl px-4 py-3 bg-[#2a2a2a] border border-[#333333] ${isAgentA ? 'rounded-tl-sm' : 'rounded-tr-sm'
-                            } max-w-lg`}>
-                            <div className="text-[#888888] text-xs mb-2">
-                              📊 Strategic Analysis
-                            </div>
-                            <div className="text-[#aaaaaa] text-xs leading-relaxed whitespace-pre-wrap">
-                              {msg.reflection}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.type === 'refund') {
-                // Refund notification (system message style)
-                return (
-                  <div key={msg.id} className="flex justify-center">
-                    <div className="bg-[#2a2a2a] border border-[#444444] rounded-full px-4 py-2 text-xs text-[#888888] flex items-center gap-2">
-                      <span>💸</span>
-                      <span>
-                        <span className="text-[#aaaaaa] font-semibold">{msg.agentId}</span> was outbid and refunded{' '}
-                        <span className="text-[#cccccc] font-mono">${msg.refundAmount?.toFixed(2)}</span>
-                      </span>
-                      {msg.transactionHash && (
-                        <a
-                          href={`https://sepolia.basescan.org/tx/${msg.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#666666] hover:text-[#888888] underline"
-                        >
-                          tx
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.type === 'withdrawal') {
-                // Withdrawal notification (system message style)
-                return (
-                  <div key={msg.id} className="flex justify-center">
-                    <div className="bg-[#3a2a2a] border border-[#664444] rounded-lg px-6 py-4 text-sm text-[#cccccc] max-w-2xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">🏳️</span>
-                        <span className="text-[#ffffff] font-semibold">{msg.agentId} withdrew from the auction</span>
-                      </div>
-                      {msg.reasoning && (
-                        <div className="text-[#888888] text-xs mt-2 italic pl-8">
-                          &quot;{msg.reasoning.substring(0, 200)}...&quot;
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 mt-2 pl-8 text-xs">
-                        <span className="text-[#888888]">
-                          Refunded: <span className="text-[#aaaaaa] font-mono">${msg.refundAmount?.toFixed(2)}</span>
-                        </span>
-                        {msg.transactionHash && (
-                          <a
-                            href={`https://sepolia.basescan.org/tx/${msg.transactionHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#666666] hover:text-[#888888] underline"
-                          >
-                            tx →
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.type === 'auction_ended') {
-                // Auction ended notification (prominent)
-                return (
-                  <div key={msg.id} className="flex justify-center">
-                    <div className="bg-gradient-to-r from-[#2a3a2a] to-[#2a2a3a] border-2 border-[#4a6a4a] rounded-xl px-8 py-6 text-center max-w-2xl">
-                      <div className="text-4xl mb-3">🏆</div>
-                      <div className="text-[#ffffff] text-xl font-bold mb-2">
-                        Auction Ended!
-                      </div>
-                      <div className="text-[#aaaaaa] text-sm mb-4">
-                        {msg.endReason}
-                      </div>
-                      {msg.winner && (
-                        <div className="bg-[#222222] rounded-lg px-4 py-3 inline-block">
-                          <div className="text-[#888888] text-xs mb-1">Winner</div>
-                          <div className="text-[#ffffff] font-semibold text-lg">
-                            {msg.winner.agentId}
-                          </div>
-                          <div className="text-[#cccccc] text-sm mt-1">
-                            Final Bid: <span className="font-mono">${msg.finalBid?.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.type === 'ad_image_ready') {
-                // Ad image ready notification (system message style)
-                return (
-                  <div key={msg.id} className="flex justify-center">
-                    <div className="bg-[#2a3a3a] border border-[#4a6a6a] rounded-lg px-6 py-4 text-sm text-[#cccccc] max-w-2xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">🎨</span>
-                        <span className="text-[#ffffff] font-semibold">
-                          {msg.agentId} generated their ad image!
-                        </span>
-                      </div>
-                      <div className="text-[#888888] text-xs pl-8">
-                        The winning advertisement is now displayed at the top of the page.
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return null;
-            })
-          )}
-          {/* Scroll anchor */}
-          <div ref={messagesEndRef} />
+            {/* FizzUp Terminal */}
+            <TerminalPanel
+              brandName="FizzUp"
+              logs={fizzUpLogs}
+              color="green"
+              logoPath="/fizzup.png"
+            />
+          </div>
         </div>
       </div>
     </div>

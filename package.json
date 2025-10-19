@@ -13,7 +13,8 @@
     "agent:ai:b": "tsx agents/intelligentAgentB.ts",
     "fund": "tsx fund-wallet.ts",
     "fund:agents": "tsx fund-agents.ts",
-    "generate:logos": "tsx generate-brand-logos.ts"
+    "generate:logos": "tsx generate-brand-logos.ts",
+    "test:freepik": "tsx test-freepik-402.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.4",

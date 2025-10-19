@@ -39,8 +39,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if auction has ended
+    if (!record.auctionEnded) {
+      return NextResponse.json(
+        { error: 'Auction still in progress - wait for auction to end before generating image' },
+        { status: 400 }
+      );
+    }
+
     // 2. Forward to Freepik x402 endpoint
     // Agent's wallet (Base mainnet) handles payment via x402-axios
+
+    // Construct webhook URL - use WEBHOOK_URL if set (production), otherwise localhost
+    const webhookBaseUrl = process.env.WEBHOOK_URL || process.env.NEXT_PUBLIC_BASE_URL;
+    const webhookUrl = process.env.WEBHOOK_URL
+      ? process.env.WEBHOOK_URL  // Use custom webhook URL as-is (e.g., ngrok URL)
+      : `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhooks/freepik`;  // Localhost for dev
+
+    console.log(`[generate-ad-image] Using webhook URL: ${webhookUrl}`);
+
     const freepikResponse = await fetch('https://api.freepik.com/v1/x402/ai/mystic', {
       method: 'POST',
       headers: {
@@ -53,8 +70,8 @@ export async function POST(request: NextRequest) {
         prompt,
         model: 'realism',
         resolution: '1k',
-        aspect_ratio: 'widescreen',  // 16:9 for ad banner
-        webhook_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhooks/freepik`
+        aspect_ratio: 'widescreen_16_9',  // 16:9 for ad banner
+        webhook_url: webhookUrl
       })
     });
 
@@ -86,8 +103,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. If 200, store task_id and return to agent
-    if (!data.task_id) {
+    // 4. If 200, extract task_id and return to agent
+    // Response structure: { data: { task_id, status, generated: [] } }
+    const taskId = data.data?.task_id || data.task_id;
+
+    if (!taskId) {
       console.error('No task_id in Freepik response:', data);
       return NextResponse.json(
         { error: 'Invalid response from Freepik - missing task_id' },
@@ -98,14 +118,14 @@ export async function POST(request: NextRequest) {
     // MongoDB dot notation requires 'as any' because TypeScript doesn't support
     // string literal keys for nested object updates
     await updateAdSpotRecord(adSpotId, {
-      'winnerAdImage.taskId': data.task_id,
+      'winnerAdImage.taskId': taskId,
       'winnerAdImage.prompt': prompt
     } as Record<string, unknown>);
 
-    console.log(`✅ [generate-ad-image] Task created: ${data.task_id} for ${agentId}`);
+    console.log(`✅ [generate-ad-image] Task created: ${taskId} for ${agentId}`);
 
     return NextResponse.json({
-      taskId: data.task_id,
+      taskId: taskId,
       status: 'pending'
     });
 
