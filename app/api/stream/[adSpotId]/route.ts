@@ -9,6 +9,8 @@ export async function GET(
 ) {
   const { adSpotId } = await params;
 
+  console.log(`📡 [SSE] New connection request for ad spot: "${adSpotId}"`);
+
   const stream = new ReadableStream({
     start(controller) {
       // Register this connection
@@ -16,8 +18,10 @@ export async function GET(
 
       // Send initial connection message
       const encoder = new TextEncoder();
+      const connectMsg = { type: 'connected', adSpotId, timestamp: new Date().toISOString() };
+      console.log(`📡 [SSE] Sending connection confirmation:`, connectMsg);
       controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ type: 'connected' })}\n\n`)
+        encoder.encode(`data: ${JSON.stringify(connectMsg)}\n\n`)
       );
 
       // Send heartbeat every 15 seconds to keep connection alive

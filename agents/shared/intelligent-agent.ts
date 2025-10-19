@@ -21,7 +21,7 @@ const ERC20_ABI = [
   }
 ] as const;
 
-interface BrandIdentity {
+export interface BrandIdentity {
   brandName: string;
   productName: string;
   industry: string;
@@ -55,26 +55,26 @@ interface BidDecision {
 }
 
 export class IntelligentBiddingAgent {
-  private wallet; // Base Sepolia for bidding
-  private mainnetWallet; // Base Mainnet for Freepik
-  private axiosWithPayment; // Base Sepolia
-  private axiosWithMainnetPayment; // Base Mainnet
-  private agentName: string;
-  private maxBid: number;
-  private serverUrl: string;
-  private isActive: boolean = true;
-  private publicClient;
+  protected wallet; // Base Sepolia for bidding
+  protected mainnetWallet; // Base Mainnet for Freepik
+  protected axiosWithPayment; // Base Sepolia
+  protected axiosWithMainnetPayment; // Base Mainnet
+  protected agentName: string;
+  protected maxBid: number;
+  protected serverUrl: string;
+  protected isActive: boolean = true;
+  protected publicClient;
   private monitoringInterval: NodeJS.Timeout | null = null;
   private auctionEndMonitoringInterval: NodeJS.Timeout | null = null;
-  private llm;
-  private bot;
-  private bidHistory: BidContext['bidHistory'] = [];
-  private lastRefundAmount?: number;
-  private brandIdentity?: BrandIdentity;
-  private currentAdSpotId: string = '';
-  private lastBidAmount: number = 0;
-  private isInAIReasoning: boolean = false;
-  private refundPending: boolean = false;
+  protected llm;
+  protected bot;
+  protected bidHistory: BidContext['bidHistory'] = [];
+  protected lastRefundAmount?: number;
+  protected brandIdentity?: BrandIdentity;
+  protected currentAdSpotId: string = '';
+  protected lastBidAmount: number = 0;
+  protected isInAIReasoning: boolean = false;
+  protected refundPending: boolean = false;
 
   constructor(config: {
     privateKey: Hex;

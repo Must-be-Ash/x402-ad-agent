@@ -11,10 +11,13 @@
     "agent:b": "tsx agents/agentB.ts",
     "agent:ai:a": "tsx agents/intelligentAgentA.ts",
     "agent:ai:b": "tsx agents/intelligentAgentB.ts",
+    "agent:cdp": "tsx agents/coinbaseCDPAgent.ts",
+    "agent:crossmint": "tsx agents/crossmintAgent.ts",
     "fund": "tsx fund-wallet.ts",
     "fund:agents": "tsx fund-agents.ts",
     "generate:logos": "tsx generate-brand-logos.ts",
-    "test:freepik": "tsx test-freepik-402.ts"
+    "test:freepik": "tsx test-freepik-402.ts",
+    "test:firecrawl": "tsx test-firecrawl-scrape.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.4",
