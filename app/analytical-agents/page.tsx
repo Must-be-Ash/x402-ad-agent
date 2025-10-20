@@ -6,7 +6,7 @@ import TerminalPanel from '@/app/components/TerminalPanel';
 interface StreamingMessage {
   id: string;
   type: 'agent_started' | 'scraping_started' | 'scraping_completed' | 'analytics_payment' | 'analytics_received' |
-        'analysis_started' | 'analysis_completed' | 'thinking' | 'bid' | 'reflection' |
+        'analysis_started' | 'analysis_completed' | 'agent_status' | 'thinking' | 'bid' | 'reflection' |
         'refund' | 'withdrawal' | 'agent_skipped' | 'agent_error' | 'auction_ended' | 'ad_image_ready' | 'image_generation_update';
   agentId?: string;
   timestamp: string;
@@ -54,6 +54,8 @@ interface StreamingMessage {
   targetSpots?: string[];
   budgetPerSpot?: { [key: string]: number };
   strategy?: string;
+  // Agent status fields
+  status?: string;
   // Bidding fields
   thinking?: string;
   proposedAmount?: number;
@@ -79,19 +81,42 @@ interface StreamingMessage {
 
 export default function AnalyticalAgentsPage() {
   const [messages, setMessages] = useState<StreamingMessage[]>([]);
+  const [seenEventIds] = useState(new Set<string>()); // Deduplication
+  const [connectionStatus, setConnectionStatus] = useState<{[key: string]: 'connecting' | 'connected' | 'disconnected'}>({});
+  const [eventGaps, setEventGaps] = useState<{agentId: string, missing: number[]}[]>([]);
+  const [replayStatus, setReplayStatus] = useState<{[key: string]: {loading: boolean, count: number}}>({});
+  const [liveEventCount, setLiveEventCount] = useState(0);
+  const [showDebug, setShowDebug] = useState(false);
 
-  useEffect(() => {
-    const eventSources: EventSource[] = [];
-    const reconnectTimeouts: NodeJS.Timeout[] = [];
+  // Helper function to process incoming events
+  const processEvent = (data: any, adSpotId: string, timestamp: string) => {
+    // Log ALL incoming events with detailed info
+    console.log(`\n📥 [${timestamp}] [BROWSER] Received event from "${adSpotId}"`);
+    console.log(`   Type: ${data.type}`);
+    console.log(`   Agent: ${data.agentId || 'system'}`);
+    console.log(`   Full data:`, data);
 
-    const connect = (adSpotId: string) => {
-      const eventSource = new EventSource(`/api/stream/${encodeURIComponent(adSpotId)}`);
+    // Create a unique ID for deduplication
+    const dedupeKey = `${data.agentId || 'system'}-${data.type}-${data.timestamp}`;
+    if (seenEventIds.has(dedupeKey)) {
+      console.log(`   🔄 DUPLICATE - ignoring (already processed)\n`);
+      return;
+    }
+    seenEventIds.add(dedupeKey);
 
-      eventSource.addEventListener('message', (e) => {
-        const data = JSON.parse(e.data);
+    // Track historical vs new events
+    const isHistorical = new Date(data.timestamp) < new Date(timestamp);
+    if (isHistorical) {
+      console.log(`   📖 Historical event (from database)`);
+    } else {
+      console.log(`   🔴 NEW event (just stored)`);
+      setLiveEventCount(prev => prev + 1);
+    }
 
-        // Create a unique ID for each message
-        const msgId = `${data.agentId || 'system'}-${data.type}-${Date.now()}-${Math.random()}`;
+    console.log(`   ✅ Processing and rendering...\n`);
+
+    // Create a unique ID for React
+    const msgId = `${data.agentId || 'system'}-${data.type}-${data.timestamp}-${Math.random()}`;
 
         switch (data.type) {
           case 'agent_started':
@@ -177,6 +202,16 @@ export default function AnalyticalAgentsPage() {
               targetSpots: data.targetSpots,
               budgetPerSpot: data.budgetPerSpot,
               strategy: data.strategy,
+            }]);
+            break;
+
+          case 'agent_status':
+            setMessages(prev => [...prev, {
+              id: msgId,
+              type: 'agent_status',
+              agentId: data.agentId,
+              timestamp: data.timestamp,
+              status: data.status,
             }]);
             break;
 
@@ -305,31 +340,80 @@ export default function AnalyticalAgentsPage() {
             }]);
             break;
         }
-      });
+  };
 
-      eventSource.onerror = () => {
-        console.log(`SSE connection lost for ${adSpotId}, reconnecting in 3s...`);
-        eventSource?.close();
-        const timeout = setTimeout(() => connect(adSpotId), 3000);
-        reconnectTimeouts.push(timeout);
-      };
-
-      eventSources.push(eventSource);
+  // Polling logic - replaces SSE
+  useEffect(() => {
+    const lastFetched: { [key: string]: string | null } = {
+      'prime-banner': null,
+      'sidebar-secondary': null,
     };
 
-    // Connect to both ad spots
-    connect('prime-banner');
-    connect('sidebar-secondary');
+    let isPolling = true;
+
+    const pollEvents = async (adSpotId: string) => {
+      if (!isPolling) return;
+
+      try {
+        setConnectionStatus(prev => ({ ...prev, [adSpotId]: 'connecting' }));
+
+        // Build URL with optional 'since' parameter
+        const url = lastFetched[adSpotId]
+          ? `/api/events/${encodeURIComponent(adSpotId)}?since=${encodeURIComponent(lastFetched[adSpotId]!)}`
+          : `/api/events/${encodeURIComponent(adSpotId)}`;
+
+        console.log(`\n🔄 [POLLING] Fetching events for "${adSpotId}"${lastFetched[adSpotId] ? ` since ${lastFetched[adSpotId]}` : ' (initial load)'}`);
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (!result.success) {
+          console.error(`   ❌ Polling error:`, result.error);
+          setConnectionStatus(prev => ({ ...prev, [adSpotId]: 'disconnected' }));
+          return;
+        }
+
+        setConnectionStatus(prev => ({ ...prev, [adSpotId]: 'connected' }));
+
+        const { events, timestamp: serverTimestamp } = result;
+        console.log(`   ✅ Received ${events.length} event(s)`);
+
+        // Process each event
+        events.forEach((event: any) => {
+          processEvent(event, adSpotId, serverTimestamp);
+        });
+
+        // Update last fetched timestamp
+        lastFetched[adSpotId] = serverTimestamp;
+
+      } catch (error) {
+        console.error(`   ❌ Polling failed for "${adSpotId}":`, error);
+        setConnectionStatus(prev => ({ ...prev, [adSpotId]: 'disconnected' }));
+      }
+    };
+
+    // Initial fetch for both spots
+    console.log('\n🚀 [POLLING] Starting event polling system...');
+    pollEvents('prime-banner');
+    pollEvents('sidebar-secondary');
+
+    // Poll every 2 seconds
+    const interval = setInterval(() => {
+      pollEvents('prime-banner');
+      pollEvents('sidebar-secondary');
+    }, 2000);
 
     return () => {
-      eventSources.forEach(es => es.close());
-      reconnectTimeouts.forEach(timeout => clearTimeout(timeout));
+      console.log('\n🛑 [POLLING] Stopping event polling system');
+      isPolling = false;
+      clearInterval(interval);
     };
   }, []);
 
   // Convert streaming messages to terminal logs
   const messageToTerminalLog = (msg: StreamingMessage) => {
     const logs: Array<{
+      id?: string;
       timestamp: string;
       type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
       icon: string;
@@ -341,6 +425,7 @@ export default function AnalyticalAgentsPage() {
     switch (msg.type) {
       case 'agent_started':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'info',
           icon: '🚀',
@@ -351,6 +436,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'scraping_started':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'payment',
           icon: '💳',
@@ -361,6 +447,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'scraping_completed':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'success',
           icon: '✓',
@@ -371,6 +458,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'analytics_payment':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'payment',
           icon: '💳',
@@ -385,6 +473,7 @@ export default function AnalyticalAgentsPage() {
         ).join('\n') || '';
 
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'success',
           icon: '📊',
@@ -395,6 +484,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'analysis_started':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'thinking',
           icon: '🧠',
@@ -407,6 +497,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'analysis_completed':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: msg.shouldBid ? 'success' : 'info',
           icon: msg.shouldBid ? '✓' : '⊘',
@@ -419,8 +510,20 @@ export default function AnalyticalAgentsPage() {
         });
         break;
 
+      case 'agent_status':
+        logs.push({
+          id: `${msg.id}-0`,
+          timestamp: msg.timestamp,
+          type: 'thinking',
+          icon: '🤔',
+          message: `STATUS: ${msg.status?.toUpperCase()}`,
+          details: `Agent is currently ${msg.status}...`,
+        });
+        break;
+
       case 'thinking':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'thinking',
           icon: '💭',
@@ -429,6 +532,7 @@ export default function AnalyticalAgentsPage() {
         });
         if (msg.proposedAmount) {
           logs.push({
+            id: `${msg.id}-1`,
             timestamp: msg.timestamp,
             type: 'info',
             icon: '💰',
@@ -440,6 +544,7 @@ export default function AnalyticalAgentsPage() {
       case 'bid':
         const bidAmount = typeof msg.amount === 'number' ? msg.amount : parseFloat(msg.amount || '0');
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'payment',
           icon: '💳',
@@ -447,6 +552,7 @@ export default function AnalyticalAgentsPage() {
           details: `Amount: $${bidAmount.toFixed(2)} USDC`,
         });
         logs.push({
+          id: `${msg.id}-1`,
           timestamp: msg.timestamp,
           type: 'success',
           icon: '✓',
@@ -458,6 +564,7 @@ export default function AnalyticalAgentsPage() {
         });
         if (msg.reflection) {
           logs.push({
+            id: `${msg.id}-2`,
             timestamp: msg.timestamp,
             type: 'info',
             icon: '📝',
@@ -469,6 +576,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'refund':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'payment',
           icon: '💸',
@@ -483,6 +591,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'withdrawal':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'info',
           icon: '🏳️',
@@ -497,6 +606,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'agent_skipped':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'info',
           icon: '⊘',
@@ -507,6 +617,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'agent_error':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'error',
           icon: '❌',
@@ -529,6 +640,7 @@ export default function AnalyticalAgentsPage() {
           failed: 'error' as const
         };
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: statusTypes[msg.status as keyof typeof statusTypes] || 'info',
           icon: statusIcons[msg.status as keyof typeof statusIcons] || '🎨',
@@ -542,6 +654,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'ad_image_ready':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: 'success',
           icon: '🎨',
@@ -552,6 +665,7 @@ export default function AnalyticalAgentsPage() {
 
       case 'auction_ended':
         logs.push({
+          id: `${msg.id}-0`,
           timestamp: msg.timestamp,
           type: msg.winner?.agentId === msg.agentId ? 'success' : 'info',
           icon: msg.winner?.agentId === msg.agentId ? '🏆' : '🏁',
@@ -564,9 +678,46 @@ export default function AnalyticalAgentsPage() {
     return logs;
   };
 
+  // Detect event gaps
+  useEffect(() => {
+    const agentSequences: {[agentId: string]: number[]} = {};
+
+    messages.forEach(msg => {
+      if (msg.agentId && (msg as any).eventSequence) {
+        if (!agentSequences[msg.agentId]) {
+          agentSequences[msg.agentId] = [];
+        }
+        agentSequences[msg.agentId].push((msg as any).eventSequence);
+      }
+    });
+
+    const gaps: {agentId: string, missing: number[]}[] = [];
+    Object.entries(agentSequences).forEach(([agentId, sequences]) => {
+      if (sequences.length === 0) return;
+
+      sequences.sort((a, b) => a - b);
+      const missing: number[] = [];
+
+      for (let i = sequences[0]; i <= sequences[sequences.length - 1]; i++) {
+        if (!sequences.includes(i)) {
+          missing.push(i);
+        }
+      }
+
+      if (missing.length > 0) {
+        gaps.push({ agentId, missing });
+      }
+    });
+
+    setEventGaps(gaps);
+  }, [messages]);
+
   // Split messages by agent
   const { coinbaseLogs, crossmintLogs } = useMemo(() => {
+    console.log(`[RENDER] Processing ${messages.length} messages into terminal logs`);
+
     const coinbaseLogs: Array<{
+      id?: string;
       timestamp: string;
       type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
       icon: string;
@@ -575,6 +726,7 @@ export default function AnalyticalAgentsPage() {
       link?: { href: string; label: string };
     }> = [];
     const crossmintLogs: Array<{
+      id?: string;
       timestamp: string;
       type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
       icon: string;
@@ -583,25 +735,82 @@ export default function AnalyticalAgentsPage() {
       link?: { href: string; label: string };
     }> = [];
 
-    messages.forEach(msg => {
+    messages.forEach((msg, idx) => {
       const agentId = msg.agentId || '';
+      console.log(`[RENDER] Message ${idx + 1}/${messages.length}:`, msg.type, 'from', agentId);
 
       // Route to Coinbase terminal
       if (agentId === 'CoinbaseCDP' || msg.type === 'auction_ended') {
-        coinbaseLogs.push(...messageToTerminalLog(msg));
+        const logs = messageToTerminalLog(msg);
+        console.log(`[RENDER] Adding ${logs.length} log(s) to Coinbase terminal for`, msg.type);
+        coinbaseLogs.push(...logs);
       }
 
       // Route to Crossmint terminal
       if (agentId === 'Crossmint' || msg.type === 'auction_ended') {
-        crossmintLogs.push(...messageToTerminalLog(msg));
+        const logs = messageToTerminalLog(msg);
+        console.log(`[RENDER] Adding ${logs.length} log(s) to Crossmint terminal for`, msg.type);
+        crossmintLogs.push(...logs);
       }
     });
 
+    console.log(`[RENDER] Final counts - Coinbase: ${coinbaseLogs.length}, Crossmint: ${crossmintLogs.length}`);
     return { coinbaseLogs, crossmintLogs };
   }, [messages]);
 
+  const handleRefreshEvents = async () => {
+    console.log('[REFRESH] Reloading page to fetch latest events...');
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
+      {/* Event Gap Warning Banner */}
+      {eventGaps.length > 0 && (
+        <div className="bg-amber-900/20 border-b border-amber-700/50 px-6 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-500 text-lg">⚠️</span>
+              <div className="text-sm">
+                <span className="text-amber-400 font-semibold">Missing Events Detected:</span>
+                {eventGaps.map(gap => (
+                  <span key={gap.agentId} className="text-amber-300 ml-2">
+                    {gap.agentId} (events {gap.missing.join(', ')})
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleRefreshEvents}
+              className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded transition-colors"
+            >
+              Refresh Events
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Replay Status Banner */}
+      {Object.values(replayStatus).some(s => s.loading) && (
+        <div className="bg-blue-900/20 border-b border-blue-700/50 px-6 py-3">
+          <div className="max-w-7xl mx-auto flex items-center gap-3">
+            <span className="text-blue-500 text-lg animate-pulse">📖</span>
+            <div className="text-sm">
+              <span className="text-blue-400 font-semibold">Loading Historical Events from Database...</span>
+              <span className="text-blue-300 ml-2">
+                {Object.entries(replayStatus).map(([spotId, status]) => (
+                  status.loading && status.count > 0 ? (
+                    <span key={spotId} className="ml-2">
+                      {spotId}: {status.count} events loaded
+                    </span>
+                  ) : null
+                ))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-[#2a2a2a] border-b border-[#333333] px-6 py-4">
         <div className="max-w-7xl mx-auto">
@@ -612,15 +821,106 @@ export default function AnalyticalAgentsPage() {
               </h1>
               <p className="text-[#888888] text-sm">Autonomous analysis, bidding, and creative generation</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-xs text-[#888888]">
-                <div>🎯 Prime Banner</div>
-                <div>📍 Sidebar Secondary</div>
+            <div className="flex items-center gap-6">
+              {/* Connection Status */}
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full ${connectionStatus['prime-banner'] === 'connected' ? 'bg-green-500' : connectionStatus['prime-banner'] === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <span className="text-[#888888]">Prime Banner</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full ${connectionStatus['sidebar-secondary'] === 'connected' ? 'bg-green-500' : connectionStatus['sidebar-secondary'] === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <span className="text-[#888888]">Sidebar Secondary</span>
+                </div>
               </div>
+
+              {/* Event Counter */}
+              <div className="flex flex-col gap-1 text-xs text-[#888888] font-mono bg-[#1a1a1a] px-3 py-1.5 rounded border border-[#333333]">
+                <div>📊 Total: {messages.length} events</div>
+                <div className="flex gap-3">
+                  <span>CDP: {coinbaseLogs.length}</span>
+                  <span>Cross: {crossmintLogs.length}</span>
+                  <span className="text-green-400">🔴 Live: {liveEventCount}</span>
+                </div>
+              </div>
+
+              {/* Debug Toggle */}
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-xs bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#888888] px-3 py-2 rounded border border-[#444444] transition-colors"
+              >
+                {showDebug ? '🔍 Hide Debug' : '🔍 Show Debug'}
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <div className="bg-[#1e1e1e] border-b border-[#333333] px-6 py-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-xs font-mono">
+              <div className="text-[#ffffff] font-semibold mb-3">🔍 Debug Panel - Event Flow Tracker</div>
+
+              {/* Connection Times */}
+              <div className="mb-4 p-3 bg-[#2a2a2a] rounded border border-[#444444]">
+                <div className="text-[#888888] mb-2">SSE Connections:</div>
+                <div className="space-y-1 text-[#aaaaaa]">
+                  {['prime-banner', 'sidebar-secondary'].map(spotId => (
+                    <div key={spotId} className="flex justify-between">
+                      <span>{spotId}:</span>
+                      <span className={connectionStatus[spotId] === 'connected' ? 'text-green-400' : 'text-yellow-400'}>
+                        {connectionStatus[spotId] || 'not connected'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Event Breakdown */}
+              <div className="mb-4 p-3 bg-[#2a2a2a] rounded border border-[#444444]">
+                <div className="text-[#888888] mb-2">Event Breakdown by Agent:</div>
+                <div className="space-y-1 text-[#aaaaaa]">
+                  {['CoinbaseCDP', 'Crossmint'].map(agentId => {
+                    const agentEvents = messages.filter(m => m.agentId === agentId);
+                    return (
+                      <div key={agentId} className="flex justify-between">
+                        <span>{agentId}:</span>
+                        <span className="text-blue-400">{agentEvents.length} events</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Recent Events */}
+              <div className="p-3 bg-[#2a2a2a] rounded border border-[#444444]">
+                <div className="text-[#888888] mb-2">Last 10 Events Received:</div>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {messages.slice(-10).reverse().map((msg, idx) => (
+                    <div key={idx} className="text-[10px] p-2 bg-[#1a1a1a] rounded border border-[#333333]">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-purple-400">{msg.type}</span>
+                        <span className="text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      <div className="text-gray-400">Agent: {msg.agentId || 'system'}</div>
+                      {msg.reasoning && (
+                        <div className="text-gray-500 mt-1 truncate">
+                          Reasoning: {msg.reasoning.substring(0, 100)}...
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {messages.length === 0 && (
+                    <div className="text-gray-600 italic">No events yet - waiting for agent to start...</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dual Terminal View */}
       <div className="flex-1 overflow-hidden px-6 py-6">

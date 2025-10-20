@@ -61,17 +61,25 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
   private budgetDecision?: BudgetDecision;
   private availableSpots: string[] = [];
   private tunnelUrl?: string;
+  private eventSequence: number = 0; // Track event sequence for gap detection
 
   /**
    * Broadcast event to ALL available ad spots (not just primary)
    * AWAITS all broadcasts to ensure events are stored before continuing
+   * Includes sequence number for gap detection
    */
   private async broadcastToAllSpots(event: Record<string, unknown>): Promise<void> {
-    console.log(`📡 [${this.agentName}] Broadcasting ${event.type} to ${this.availableSpots.length} spot(s)...`);
+    this.eventSequence++;
+    const eventWithSeq = {
+      ...event,
+      eventSequence: this.eventSequence
+    };
+
+    console.log(`📡 [${this.agentName}] Broadcasting [${this.eventSequence}] ${event.type} to ${this.availableSpots.length} spot(s)...`);
     await Promise.all(
-      this.availableSpots.map(spotId => broadcastEvent(spotId, event))
+      this.availableSpots.map(spotId => broadcastEvent(spotId, eventWithSeq))
     );
-    console.log(`✅ [${this.agentName}] Event ${event.type} broadcast complete`);
+    console.log(`✅ [${this.agentName}] Event [${this.eventSequence}] ${event.type} broadcast complete`);
   }
 
   constructor(config: {
@@ -493,6 +501,10 @@ Return ONLY the JSON object above. Do not include any other text.`;
 
     // Set current ad spot for AI tools to use
     this.currentAdSpotId = primarySpot;
+
+    console.log(`\n✅ [${this.agentName}] Starting analysis phase...`);
+    console.log(`   💡 View live at: http://localhost:3000/analytical-agents`);
+    console.log(`   📖 All events stored in MongoDB and will replay when browser connects\n`);
 
     // Broadcast agent started event to ALL spots
     await this.broadcastToAllSpots({

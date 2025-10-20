@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import Image from 'next/image';
 
 interface TerminalLog {
+  id?: string; // Unique identifier for React keys
   timestamp: string;
   type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
   icon: string;
@@ -97,7 +98,7 @@ export default function TerminalPanel({ brandName, logs, color, logoPath }: Term
         ) : (
           <div className="space-y-2">
             {logs.map((log, index) => (
-              <div key={index} className="flex flex-col gap-1">
+              <div key={log.id || `${log.timestamp}-${index}`} className="flex flex-col gap-1">
                 {/* Main log line */}
                 <div className="flex items-start gap-3">
                   <span className="text-gray-600 flex-shrink-0">
