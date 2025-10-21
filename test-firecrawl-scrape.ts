@@ -13,7 +13,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: 'agents/.env' });
 
 const TEST_URL = 'https://developers.cloudflare.com/agents/x402/';
-const EZ402_ENDPOINT = 'http://localhost:3002/api/x402/firecrawl_web_scraping_api_scrapes_single_pages_an';
+const EZ402_ENDPOINT = 'https://x402-wrapper.vercel.app/api/x402/firecrawl_web_scraping_api_scrapes_single_pages_an';
 
 async function testFirecrawlScrape() {
   console.log('\n🧪 Testing ez402-wrapped Firecrawl endpoint\n');

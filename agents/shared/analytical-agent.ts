@@ -120,7 +120,7 @@ export class AnalyticalBiddingAgent extends IntelligentBiddingAgent {
       // Use x402-wrapped Firecrawl endpoint
       // Note: Firecrawl v2 API doesn't support custom headers for target URL
       const response = await this.axiosWithPayment.post(
-        'http://localhost:3002/api/x402/firecrawl_web_scraping_api_scrapes_single_pages_an',
+        'https://x402-wrapper.vercel.app/api/x402/firecrawl_web_scraping_api_scrapes_single_pages_an',
         {
           url,
           formats: ['markdown'],
