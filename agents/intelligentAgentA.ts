@@ -1,3 +1,15 @@
+/**
+ * Intelligent Agent A - IceCo (Premium Water Brand)
+ *
+ * Example intelligent bidding agent with pre-configured brand identity.
+ * Demonstrates AI-powered strategic bidding with Claude and LlamaIndex.
+ *
+ * Brand: IceCo - CrystalPure Premium Water
+ * Strategy: Premium positioning, targets health-conscious consumers
+ *
+ * Usage: npm run agent:ai:a
+ */
+
 import { IntelligentBiddingAgent } from './shared/intelligent-agent';
 import dotenv from 'dotenv';
 import { Hex } from 'viem';

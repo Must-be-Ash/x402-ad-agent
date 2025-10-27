@@ -1,3 +1,34 @@
+/**
+ * Bid API Route - x402 Payment-Gated Auction Bidding
+ *
+ * This is the core endpoint for placing bids on ad spots using the x402 payment protocol.
+ *
+ * x402 PAYMENT FLOW:
+ * 1. Agent sends bid request WITHOUT payment (just proposal)
+ * 2. Server responds 402 Payment Required with exact amount needed
+ * 3. Agent signs EIP-3009 authorization and retries with X-PAYMENT header
+ * 4. Server verifies payment signature
+ * 5. Server settles payment on-chain via x402 facilitator
+ * 6. Server refunds previous bidder (REFUND-AS-SIGNAL pattern)
+ * 7. Server broadcasts events for real-time UI updates
+ *
+ * REFUND-AS-SIGNAL PATTERN:
+ * Instead of the server notifying agents they were outbid via webhooks/polling,
+ * agents simply monitor their USDC balance. When they receive a refund, they know
+ * they were outbid and immediately trigger AI re-evaluation. This is:
+ * - More elegant (no polling needed)
+ * - More reliable (blockchain is source of truth)
+ * - More economically aligned (agents get their money back instantly)
+ *
+ * SETTLEMENT LOCK MECHANISM:
+ * To prevent "replacement transaction underpriced" errors when multiple agents
+ * bid simultaneously, we use an in-memory lock per ad spot. Agents queue up
+ * and process settlements sequentially.
+ *
+ * @see {@link https://x402.org/docs} - x402 Protocol Documentation
+ * @see {@link ../../../lib/wallet.ts} - Refund implementation
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdSpotRecord, updateAdSpotRecord, addBidToHistory } from '@/lib/db';
 import { sendRefund, getServerWalletClient } from '@/lib/wallet';
@@ -6,7 +37,8 @@ import { verify, settle } from 'x402/facilitator';
 import type { PaymentPayload, ExactEvmPayload, Signer } from 'x402/types';
 import { broadcastEvent } from '@/lib/events';
 
-// Simple in-memory lock to prevent concurrent settlements
+// Settlement lock: Prevents concurrent payment settlements that would cause nonce conflicts
+// Maps adSpotId -> Promise of current settlement in progress
 const settlementLocks = new Map<string, Promise<unknown>>();
 
 export async function POST(

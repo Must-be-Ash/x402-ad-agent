@@ -1,3 +1,17 @@
+/**
+ * Analytical Agent - Crossmint
+ *
+ * Example analytical bidding agent that scrapes and analyzes target websites
+ * before making strategic bidding decisions.
+ *
+ * Brand: Crossmint - Server Wallets & Stablecoin Payments
+ * Strategy: Developer-first positioning, ROI-based dynamic bidding
+ *
+ * Usage: npm run agent:crossmint
+ *
+ * Note: Requires TUNNEL_URL in agents/.env for website scraping
+ */
+
 import { AnalyticalBiddingAgent } from './shared/analytical-agent';
 import dotenv from 'dotenv';
 import { Hex } from 'viem';

@@ -1,3 +1,17 @@
+/**
+ * Analytical Agent - Coinbase Developer Platform
+ *
+ * Example analytical bidding agent that scrapes and analyzes target websites
+ * before making strategic bidding decisions.
+ *
+ * Brand: Coinbase Developer Platform - Server Wallets
+ * Strategy: Enterprise-grade positioning, ROI-based dynamic bidding
+ *
+ * Usage: npm run agent:cdp
+ *
+ * Note: Requires TUNNEL_URL in agents/.env for website scraping
+ */
+
 import { AnalyticalBiddingAgent } from './shared/analytical-agent';
 import dotenv from 'dotenv';
 import { Hex } from 'viem';

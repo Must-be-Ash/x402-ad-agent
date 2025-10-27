@@ -1,3 +1,15 @@
+/**
+ * Intelligent Agent B - FizzUp (Sports Drink Brand)
+ *
+ * Example intelligent bidding agent with pre-configured brand identity.
+ * Demonstrates AI-powered strategic bidding with Claude and LlamaIndex.
+ *
+ * Brand: FizzUp - Performance Sports Drink
+ * Strategy: Active lifestyle positioning, targets fitness enthusiasts
+ *
+ * Usage: npm run agent:ai:b
+ */
+
 import { IntelligentBiddingAgent } from './shared/intelligent-agent';
 import dotenv from 'dotenv';
 import { Hex } from 'viem';

@@ -1,3 +1,18 @@
+/**
+ * Fund Agent Wallets Script
+ *
+ * Uses Coinbase CDP faucet to fund agent wallets with test USDC on Base Sepolia.
+ *
+ * Requirements:
+ * - Coinbase CDP API credentials in .env.local
+ * - Agent wallet addresses in agents/.env
+ *
+ * Usage:
+ *   npm run fund:agents
+ *
+ * Note: Faucet has rate limits. If you get errors, wait a few minutes and try again.
+ */
+
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { privateKeyToAccount } from 'viem/accounts';
 import { createPublicClient, http } from 'viem';

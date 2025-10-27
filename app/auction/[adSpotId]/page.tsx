@@ -36,6 +36,9 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
   const { adSpotId } = use(params);
   const [messages, setMessages] = useState<StreamingMessage[]>([]);
   const [currentBid, setCurrentBid] = useState<number | null>(null);
+  const [auctionEndTime, setAuctionEndTime] = useState<Date | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [auctionEnded, setAuctionEnded] = useState(false);
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -176,6 +179,16 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
         .then(data => {
           setCurrentBid(data.currentBid);
 
+          // Set auction end time if available
+          if (data.auctionEndTime) {
+            setAuctionEndTime(new Date(data.auctionEndTime));
+          }
+
+          // Set auction ended status
+          if (data.auctionEnded) {
+            setAuctionEnded(true);
+          }
+
           // Load existing messages from history
           if (data.bidHistory) {
             const historicalMessages: StreamingMessage[] = [];
@@ -216,6 +229,59 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
       }
     };
   }, [adSpotId]);
+
+  // Poll for auction status updates (including end time)
+  useEffect(() => {
+    const pollStatus = () => {
+      fetch(`/api/status?adSpotId=${encodeURIComponent(adSpotId)}`)
+        .then(res => res.json())
+        .then(data => {
+          setCurrentBid(data.currentBid);
+
+          if (data.auctionEndTime) {
+            setAuctionEndTime(new Date(data.auctionEndTime));
+          }
+
+          if (data.auctionEnded) {
+            setAuctionEnded(true);
+          }
+        })
+        .catch(err => console.error('Failed to poll status:', err));
+    };
+
+    // Poll every 2 seconds
+    const interval = setInterval(pollStatus, 2000);
+
+    return () => clearInterval(interval);
+  }, [adSpotId]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!auctionEndTime || auctionEnded) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = new Date().getTime();
+      const end = auctionEndTime.getTime();
+      const remaining = Math.max(0, Math.floor((end - now) / 1000));
+
+      setTimeRemaining(remaining);
+
+      if (remaining === 0) {
+        setAuctionEnded(true);
+      }
+    };
+
+    // Update immediately
+    updateTimer();
+
+    // Then update every second
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [auctionEndTime, auctionEnded]);
 
   const getBrandName = (agentId: string) => {
     if (agentId === 'IceCo' || agentId === 'AgentA') return 'IceCo';
@@ -426,6 +492,28 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
                 <div className="text-[#888888] text-xs uppercase tracking-wide">Current Bid</div>
                 <div className="text-[#ffffff] text-2xl font-bold">
                   ${currentBid?.toFixed(2) || '0.00'}
+                </div>
+              </div>
+
+              {/* Timer */}
+              <div className="text-right">
+                <div className="text-[#888888] text-xs uppercase tracking-wide">Time Remaining</div>
+                <div className={`text-2xl font-bold ${
+                  auctionEnded
+                    ? 'text-red-500'
+                    : timeRemaining !== null && timeRemaining <= 60
+                      ? 'text-yellow-500'
+                      : 'text-[#ffffff]'
+                }`}>
+                  {auctionEnded ? (
+                    'ENDED'
+                  ) : timeRemaining !== null ? (
+                    <>
+                      {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                    </>
+                  ) : (
+                    '--:--'
+                  )}
                 </div>
               </div>
 

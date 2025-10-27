@@ -4,7 +4,20 @@ import { AdSpotRecord } from '@/types';
 let client: MongoClient;
 let db: Db;
 
+// In-memory storage as fallback
+const inMemoryStorage = {
+  adSpotRecords: new Map<string, AdSpotRecord>(),
+  analyticalEvents: [] as StoredEvent[]
+};
+
+const USE_IN_MEMORY = !process.env.MONGODB_URI;
+
 export async function connectToDatabase() {
+  if (USE_IN_MEMORY) {
+    console.log('📦 Using in-memory storage (data will not persist)');
+    return { client: null as any, db: null as any };
+  }
+
   if (db) {
     return { client, db };
   }
@@ -29,8 +42,18 @@ export async function connectToDatabase() {
   return { client, db };
 }
 
+// Event storage interface
+export interface StoredEvent {
+  adSpotId: string;
+  event: Record<string, unknown>;
+  timestamp: Date;
+}
+
 // Ad Spot functions (new)
 export async function getAdSpotRecord(adSpotId: string): Promise<AdSpotRecord | null> {
+  if (USE_IN_MEMORY) {
+    return inMemoryStorage.adSpotRecords.get(adSpotId) || null;
+  }
   const { db } = await connectToDatabase();
   return db.collection<AdSpotRecord>('adSpotRecords').findOne({ adSpotId });
 }
@@ -39,6 +62,18 @@ export async function updateAdSpotRecord(
   adSpotId: string,
   update: Partial<AdSpotRecord>
 ): Promise<void> {
+  if (USE_IN_MEMORY) {
+    const existing = inMemoryStorage.adSpotRecords.get(adSpotId);
+    const updated = {
+      ...existing,
+      ...update,
+      adSpotId,
+      updatedAt: new Date(),
+      createdAt: existing?.createdAt || new Date()
+    } as AdSpotRecord;
+    inMemoryStorage.adSpotRecords.set(adSpotId, updated);
+    return;
+  }
   const { db } = await connectToDatabase();
   await db.collection<AdSpotRecord>('adSpotRecords').updateOne(
     { adSpotId },
@@ -54,6 +89,16 @@ export async function addBidToHistory(
   adSpotId: string,
   bid: AdSpotRecord['bidHistory'][0]
 ): Promise<void> {
+  if (USE_IN_MEMORY) {
+    const existing = inMemoryStorage.adSpotRecords.get(adSpotId);
+    if (existing) {
+      existing.bidHistory = existing.bidHistory || [];
+      existing.bidHistory.push(bid);
+      existing.updatedAt = new Date();
+      inMemoryStorage.adSpotRecords.set(adSpotId, existing);
+    }
+    return;
+  }
   const { db } = await connectToDatabase();
   await db.collection<AdSpotRecord>('adSpotRecords').updateOne(
     { adSpotId },
@@ -65,14 +110,17 @@ export async function addBidToHistory(
 }
 
 // Event storage for complete observability
-export interface StoredEvent {
-  adSpotId: string;
-  event: Record<string, unknown>;
-  timestamp: Date;
-}
-
 export async function storeEvent(adSpotId: string, event: Record<string, unknown>): Promise<void> {
   try {
+    if (USE_IN_MEMORY) {
+      inMemoryStorage.analyticalEvents.push({
+        adSpotId,
+        event,
+        timestamp: new Date()
+      });
+      console.log(`💾 [DB] ✅ Stored event for ${adSpotId}:`, event.type);
+      return;
+    }
     const { db } = await connectToDatabase();
     await db.collection<StoredEvent>('analyticalEvents').insertOne({
       adSpotId,
@@ -88,6 +136,15 @@ export async function storeEvent(adSpotId: string, event: Record<string, unknown
 }
 
 export async function getStoredEvents(adSpotId: string, since?: Date): Promise<StoredEvent[]> {
+  if (USE_IN_MEMORY) {
+    let events = inMemoryStorage.analyticalEvents.filter(e => e.adSpotId === adSpotId);
+    if (since) {
+      events = events.filter(e => e.timestamp >= since);
+    }
+    events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    console.log(`📖 [DB] Retrieved ${events.length} stored events for ${adSpotId}`);
+    return events;
+  }
   const { db } = await connectToDatabase();
   const query: Record<string, unknown> = { adSpotId };
   if (since) {
