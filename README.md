@@ -18,7 +18,6 @@ An autonomous AI bidding system where intelligent agents compete for advertising
 - 💰 **Real Blockchain Payments** - USDC payments on Base Sepolia via x402
 - 🔄 **Refund-as-Signal Pattern** - Outbid agents automatically receive refunds that trigger re-evaluation
 - 🎨 **Live Auction UI** - Real-time display of agent thinking, bids, and reflections
-- 📊 **Two Agent Types** - Simple bidding agents and analytical agents that scrape/analyze sites
 
 ## Architecture
 
@@ -67,15 +66,13 @@ An autonomous AI bidding system where intelligent agents compete for advertising
 1. **Next.js Server** - Auction platform with x402 payment acceptance
 2. **AI Agents** - Autonomous bidders powered by Claude (Anthropic) and LlamaIndex
 3. **x402 Protocol** - Payment verification and settlement
-4. **Database** - MongoDB or in-memory storage for auction state
+4. **In-Memory Storage** - Simple state management for the demo
 
 ## Prerequisites
 
 - **Node.js** 20+ and npm
-- **Optional Services** (for full functionality):
-  - [Anthropic API Key](https://console.anthropic.com/) - For AI agent decision-making
-  - [Coinbase CDP Account](https://portal.cdp.coinbase.com/) - For server wallet management
-  - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) - For persistent storage (optional, uses in-memory by default)
+- **Anthropic API Key** - [Get one here](https://console.anthropic.com/) for AI agent decision-making
+- **Test Wallets** - Base Sepolia wallets with test USDC (we'll show you how to get these)
 
 ## Quick Start
 
@@ -116,20 +113,6 @@ Create `.env.local` in the project root:
 # Your server wallet's private key (handles refunds and settlements)
 SERVER_WALLET_PRIVATE_KEY=0x...
 SERVER_WALLET_ADDRESS=0x...
-
-# ============================================
-# COINBASE CDP (OPTIONAL - for wallet management)
-# ============================================
-# Get these from https://portal.cdp.coinbase.com/
-# CDP_API_KEY_ID=
-# CDP_API_KEY_SECRET=
-# CDP_WALLET_SECRET=
-
-# ============================================
-# DATABASE (OPTIONAL - defaults to in-memory)
-# ============================================
-# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
-# MONGODB_DB_NAME=x402-auction
 
 # ============================================
 # AUCTION PARAMETERS (OPTIONAL)
@@ -174,28 +157,19 @@ BID_ANTHROPIC_API_KEY=sk-ant-...
 # ============================================
 BID_SERVER_URL=http://localhost:3000
 AD_SPOT_ID=demo-spot-1            # Which ad spot to bid on
-
-# ============================================
-# ANALYTICAL AGENTS (OPTIONAL)
-# ============================================
-# For agents that scrape and analyze websites
-# TUNNEL_URL=https://your-tunnel.com  # Expose localhost for web scraping
 ```
 
 ### Getting API Keys and Wallets
 
 1. **Server Wallet**:
    ```bash
-   # Option 1: Generate a new wallet
+   # Generate a new wallet using viem
    node -e "const {generatePrivateKey, privateKeyToAccount} = require('viem/accounts'); const pk = generatePrivateKey(); console.log('Private Key:', pk); console.log('Address:', privateKeyToAccount(pk).address);"
-
-   # Option 2: Use Coinbase CDP to manage your wallet
-   # Sign up at https://portal.cdp.coinbase.com/
    ```
 
 2. **Fund Wallets with Test USDC**:
    ```bash
-   # Use Coinbase faucet (requires CDP account)
+   # Use the funding script (requires Coinbase CDP account)
    npm run fund:agents
 
    # Or manually via Base Sepolia faucet
@@ -206,10 +180,6 @@ AD_SPOT_ID=demo-spot-1            # Which ad spot to bid on
    - Sign up at https://console.anthropic.com/
    - Create a new API key
    - Add to `agents/.env` as `BID_ANTHROPIC_API_KEY`
-
-4. **MongoDB** (Optional):
-   - Create free cluster at https://www.mongodb.com/cloud/atlas
-   - Get connection string and add to `.env.local`
 
 ## Running the Demo
 
@@ -420,33 +390,7 @@ const agent = new IntelligentBiddingAgent({
 });
 ```
 
-### AnalyticalBiddingAgent
-
-**Best for:** Dynamic campaigns where you want AI to analyze the ad placement
-
-**Features:**
-- Scrapes the target website before bidding
-- Analyzes site content, audience, and ad placement value
-- Calculates ROI-based bid amounts dynamically
-- More autonomous but requires web scraping access
-
-**Example:**
-```typescript
-const agent = new AnalyticalBiddingAgent({
-  privateKey: '0x...',
-  agentName: 'CoinbaseCDP',
-  maxBid: null, // No limit - calculated from analysis
-  serverUrl: 'http://localhost:3000',
-  anthropicApiKey: 'sk-ant-...',
-  tunnelUrl: 'https://tunnel.com', // Optional
-  brandIdentity: { /* same as above */ }
-});
-
-// Scrapes site, analyzes, then decides autonomously
-agent.startAnalysis(['prime-banner', 'sidebar-secondary']);
-```
-
-See [`agents/README.md`](agents/README.md) for more details.
+See the [`examples/minimal-agent.ts`](examples/minimal-agent.ts) file for a complete working example.
 
 ## API Endpoints
 
@@ -456,7 +400,6 @@ See [`agents/README.md`](agents/README.md) for more details.
 | `/api/status` | GET | Get auction state (bid, timer, winner) |
 | `/api/events/[adSpotId]` | GET | Poll for recent events |
 | `/api/refund-request/[adSpotId]` | POST | Agent requests withdrawal |
-| `/api/skip-spot/[adSpotId]` | POST | Agent opts out of bidding |
 | `/api/bid/[adSpotId]/reflection` | POST | Submit post-bid analysis |
 | `/auction/[adSpotId]` | GET | View auction UI |
 
@@ -473,7 +416,7 @@ BID_INCREMENT_USDC=2.50          # Bigger increments
 
 ### Create Custom Agent
 
-See [`examples/custom-brand-agent.ts`](examples/custom-brand-agent.ts):
+See [`examples/minimal-agent.ts`](examples/minimal-agent.ts) for a complete example:
 
 ```typescript
 import { IntelligentBiddingAgent } from './agents/shared/intelligent-agent';
@@ -519,16 +462,6 @@ npm run fund:agents
 npm run check:server
 ```
 
-### "MongoDB connection failed"
-
-**Problem:** MongoDB URI invalid or network issue
-
-**Solution:** Remove `MONGODB_URI` from `.env.local` to use in-memory storage:
-```bash
-# Comment out or remove:
-# MONGODB_URI=mongodb+srv://...
-```
-
 ### "402 Payment Required - verification failed"
 
 **Problem:** x402 payment signature invalid
@@ -572,11 +505,11 @@ BID_SERVER_URL=http://localhost:3001
 
 We welcome contributions! Here's how to extend the project:
 
-### Adding a New Agent Type
+### Adding a New Agent
 
 1. Create new file in `agents/` directory
-2. Extend `IntelligentBiddingAgent` or `AnalyticalBiddingAgent`
-3. Customize brand identity and strategy
+2. Extend `IntelligentBiddingAgent` with your brand identity
+3. Customize bidding strategy and max bid
 4. Add npm script to `package.json`
 
 ### Adding New API Endpoints

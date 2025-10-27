@@ -415,20 +415,6 @@ ${refundContext}
 
 Think step by step and make your move!`;
 
-      // Notify server that agent is actively thinking
-      try {
-        await axios.post(
-          `${this.serverUrl}/api/agent-status/${adSpotId}`,
-          {
-            agentId: this.agentName,
-            status: 'thinking',
-            timestamp: new Date().toISOString(),
-          }
-        );
-      } catch (error) {
-        // Non-critical, continue even if this fails
-      }
-
       console.log(`\n🧠 [${this.agentName}] Starting AI reasoning...`);
       console.log(`📝 [${this.agentName}] Agent type: ${this.bot.constructor.name}`);
       console.log(`🔧 [${this.agentName}] Available tools: ${this.bot.tools?.length || 0}`);
