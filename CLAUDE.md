@@ -94,16 +94,20 @@ BID_INCREMENT_USDC=1
 FACILITATOR_URL=https://x402.org/facilitator
 ```
 
-### Agents (`agents/.env`)
+### Agents (`.env`)
 ```bash
-# Agent A
-AGENT_A_PRIVATE_KEY=0x...
-AGENT_A_NAME=AgentA
+# Agent A - CDP Wallet Configuration
+CDP_API_KEY_ID=your-api-key-id
+CDP_API_KEY_SECRET=your-api-key-secret
+CDP_WALLET_SECRET=your-wallet-secret
+AGENT_A_CDP_WALLET_ID=agent-1234567890  # Optional - creates new if not provided
+AGENT_A_NAME=IceCo
 AGENT_A_MAX_BID=10
 
-# Agent B
-AGENT_B_PRIVATE_KEY=0x...
-AGENT_B_NAME=AgentB
+# Agent B - Crossmint Wallet Configuration
+AGENT_B_CROSSMINT_API_KEY=sk_staging_...
+AGENT_B_CROSSMINT_WALLET_LOCATOR=email:user@example.com:evm:smart
+AGENT_B_NAME=FizzUp
 AGENT_B_MAX_BID=15
 
 # Anthropic (note the BID_ prefix to avoid conflicts)
