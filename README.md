@@ -84,9 +84,8 @@ git clone <repository-url>
 cd x402-ad-agent
 npm install
 
-# 2. Create environment files (see Environment Setup below)
-cp .env.example .env.local
-cp agents/.env.example agents/.env
+# 2. Create environment file (see Environment Setup below)
+cp .env.example .env
 
 # 3. Start the server
 npm run dev
@@ -102,62 +101,48 @@ npm run agent:ai:b
 
 ## Environment Setup
 
-### Server Configuration (`.env.local`)
-
-Create `.env.local` in the project root:
+All configuration is now in a single `.env` file in the project root. Create it from the example:
 
 ```bash
-# ============================================
-# SERVER WALLET (REQUIRED for payment settlement)
-# ============================================
-# Your server wallet's private key (handles refunds and settlements)
-SERVER_WALLET_PRIVATE_KEY=0x...
-SERVER_WALLET_ADDRESS=0x...
-
-# ============================================
-# AUCTION PARAMETERS (OPTIONAL)
-# ============================================
-AUCTION_DURATION_MINUTES=5      # How long each auction runs
-STARTING_BID_USDC=1            # Starting bid amount in USDC
-BID_INCREMENT_USDC=1           # Minimum bid increment
-
-# ============================================
-# X402 PROTOCOL (OPTIONAL)
-# ============================================
-FACILITATOR_URL=https://x402.org/facilitator
+cp .env.example .env
 ```
 
-### Agent Configuration (`agents/.env`)
-
-Create `agents/.env` in the agents directory:
+Then edit `.env` with your credentials:
 
 ```bash
-# ============================================
-# AGENT A CONFIGURATION
-# ============================================
-AGENT_A_PRIVATE_KEY=0x...          # Agent A's wallet private key
-AGENT_A_NAME=IceCo                 # Display name for Agent A
-AGENT_A_MAX_BID=10                 # Maximum bid in USDC
+# =============================================================================
+# REQUIRED: Anthropic API (for AI-powered bidding)
+# =============================================================================
+BID_ANTHROPIC_API_KEY=sk-ant-...  # Get from https://console.anthropic.com/
 
-# ============================================
-# AGENT B CONFIGURATION
-# ============================================
-AGENT_B_PRIVATE_KEY=0x...          # Agent B's wallet private key
-AGENT_B_NAME=FizzUp                # Display name for Agent B
-AGENT_B_MAX_BID=15                 # Maximum bid in USDC
+# =============================================================================
+# REQUIRED: CDP Wallet (for Agent A - IceCo)
+# =============================================================================
+CDP_API_KEY_ID=your-api-key-id              # From https://portal.cdp.coinbase.com/
+CDP_API_KEY_SECRET=your-api-key-secret
+CDP_WALLET_SECRET=your-wallet-secret
 
-# ============================================
-# AI CONFIGURATION (REQUIRED for intelligent agents)
-# ============================================
-# Get from https://console.anthropic.com/
-BID_ANTHROPIC_API_KEY=sk-ant-...
+# Optional: Reuse existing CDP wallet account
+AGENT_A_CDP_WALLET_ID=                      # Leave empty to auto-create on first run
 
-# ============================================
-# SERVER CONNECTION
-# ============================================
+# =============================================================================
+# REQUIRED: Crossmint Wallet (for Agent B - FizzUp)
+# =============================================================================
+AGENT_B_CROSSMINT_API_KEY=your-api-key      # From https://www.crossmint.com/console
+AGENT_B_CROSSMINT_WALLET_LOCATOR=email:your@email.com:base-sepolia
+
+# =============================================================================
+# Optional: Agent Configuration
+# =============================================================================
 BID_SERVER_URL=http://localhost:3000
-AD_SPOT_ID=demo-spot-1            # Which ad spot to bid on
+AD_SPOT_ID=homepage-banner-1
+AGENT_A_NAME=IceCo
+AGENT_B_NAME=FizzUp
+AGENT_A_MAX_BID=10
+AGENT_B_MAX_BID=15
 ```
+
+**Note:** Agent A uses CDP (Coinbase Developer Platform) wallet and Agent B uses Crossmint wallet. See [WALLET_SETUP.md](./WALLET_SETUP.md) for detailed setup instructions.
 
 ### Getting API Keys and Wallets
 
@@ -167,19 +152,20 @@ AD_SPOT_ID=demo-spot-1            # Which ad spot to bid on
    node -e "const {generatePrivateKey, privateKeyToAccount} = require('viem/accounts'); const pk = generatePrivateKey(); console.log('Private Key:', pk); console.log('Address:', privateKeyToAccount(pk).address);"
    ```
 
-2. **Fund Wallets with Test USDC**:
-   ```bash
-   # Use the funding script (requires Coinbase CDP account)
-   npm run fund:agents
+2. **Agent Wallets** (See [WALLET_SETUP.md](./WALLET_SETUP.md) for details):
+   - **Agent A**: Create CDP wallet at https://portal.cdp.coinbase.com/
+   - **Agent B**: Create Crossmint wallet at https://www.crossmint.com/
 
-   # Or manually via Base Sepolia faucet
-   # https://www.coinbase.com/faucets/base-ethereum-goerli-faucet
+   Test your wallets:
+   ```bash
+   npm run test:wallet:cdp        # Test CDP wallet (Agent A)
+   npm run test:wallet:crossmint  # Test Crossmint wallet (Agent B)
    ```
 
 3. **Anthropic API Key**:
    - Sign up at https://console.anthropic.com/
    - Create a new API key
-   - Add to `agents/.env` as `BID_ANTHROPIC_API_KEY`
+   - Add to `.env` as `BID_ANTHROPIC_API_KEY`
 
 ## Running the Demo
 
@@ -248,7 +234,52 @@ npm run check:env
 
 # Get setup help
 npm run setup:help
+
+# Deploy Crossmint wallet (if not already deployed)
+npm run deploy:crossmint
+
+# Test wallet connections
+npm run test:wallet:cdp
+npm run test:wallet:crossmint
 ```
+
+#### Deploying Crossmint Wallet
+
+Crossmint smart wallets need to be deployed before they can be used. The deployment script will:
+1. Check if the wallet is already deployed (has bytecode on-chain)
+2. If not deployed, send a self-transaction (0 value) to trigger deployment
+3. Wait for confirmation and verify deployment
+
+```bash
+npm run deploy:crossmint
+```
+
+**Output:**
+```
+🔍 Crossmint Wallet Deployment Check
+
+📋 Configuration:
+   Wallet Locator: email:user@example.com:evm:smart
+   Network: Base Sepolia
+
+📍 Fetching wallet address...
+   Address: 0x1234567890123456789012345678901234567890
+
+🔍 Checking deployment status...
+⚠️  Wallet is NOT deployed yet (no bytecode on-chain)
+🚀 Deploying wallet by sending a self-transaction...
+
+📤 Sending deployment transaction...
+✅ Deployment transaction sent!
+   Transaction Hash: 0xabc...
+   🔗 View on Basescan: https://sepolia.basescan.org/tx/0xabc...
+
+⏳ Waiting for confirmation...
+✅ Transaction confirmed!
+🎉 Deployment complete!
+```
+
+**Note:** The wallet must have sufficient ETH for gas fees. Get test ETH from [Base Sepolia Faucet](https://www.alchemy.com/faucets/base-sepolia).
 
 ## How It Works
 

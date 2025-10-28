@@ -25,34 +25,52 @@ Create your environment configuration files:
   cp agents/.env.example agents/.env
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STEP 2: Generate Wallets
+ STEP 2: Generate Server Wallet
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Generate wallet keys for the server and agents:
+Generate a wallet key for the server (for handling refunds):
 
   # Generate a wallet and copy the output
   node -e "const {generatePrivateKey, privateKeyToAccount} = require('viem/accounts'); const pk = generatePrivateKey(); const addr = privateKeyToAccount(pk).address; console.log('Private Key:', pk); console.log('Address:', addr);"
 
-Run this command 3 times to generate:
-  1. Server wallet (for .env.local)
-  2. Agent A wallet (for agents/.env)
-  3. Agent B wallet (for agents/.env)
-
-Add the keys to your .env files:
-  • .env.local → SERVER_WALLET_PRIVATE_KEY and SERVER_WALLET_ADDRESS
-  • agents/.env → AGENT_A_PRIVATE_KEY and AGENT_B_PRIVATE_KEY
+Add the keys to .env:
+  • SERVER_WALLET_PRIVATE_KEY=<private_key>
+  • SERVER_WALLET_ADDRESS=<address>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STEP 3: Get Anthropic API Key (for AI agents)
+ STEP 3: Setup Agent Wallets
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Agent A uses CDP wallet, Agent B uses Crossmint wallet.
+
+Agent A - CDP Wallet Setup:
+  1. Go to https://portal.cdp.coinbase.com/
+  2. Create a new API key and save the credentials
+  3. Add to .env:
+     • CDP_API_KEY_ID=<your_api_key_id>
+     • CDP_API_KEY_SECRET=<your_api_key_secret>
+     • CDP_WALLET_SECRET=<generate_a_random_secret>
+     • AGENT_A_CDP_WALLET_ID=<leave_empty_for_first_run>
+
+Agent B - Crossmint Wallet Setup:
+  1. Go to https://www.crossmint.com/console
+  2. Create a server-side API key
+  3. Create a custodial wallet (or use existing)
+  4. Add to .env:
+     • AGENT_B_CROSSMINT_API_KEY=<your_api_key>
+     • AGENT_B_CROSSMINT_WALLET_LOCATOR=email:user@example.com:evm:smart
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ STEP 4: Get Anthropic API Key (for AI agents)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   1. Go to https://console.anthropic.com/
   2. Sign up or log in
   3. Create a new API key
-  4. Add to agents/.env as BID_ANTHROPIC_API_KEY
+  4. Add to .env as BID_ANTHROPIC_API_KEY
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STEP 4: Fund Wallets with Test USDC
+ STEP 5: Fund Wallets with Test USDC
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Your wallets need Base Sepolia USDC to place bids.
@@ -68,7 +86,7 @@ Option B - Manual:
   3. Verify balances: npm run check:server
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STEP 5: Validate Configuration
+ STEP 6: Validate Configuration
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Check that everything is configured correctly:
@@ -81,7 +99,7 @@ This will validate:
   ✅ Required variables are set
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STEP 6: Start the Demo
+ STEP 7: Start the Demo
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Open 3 terminal windows and run:

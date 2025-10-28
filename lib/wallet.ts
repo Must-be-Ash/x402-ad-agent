@@ -2,10 +2,9 @@
  * Server Wallet Management
  *
  * Handles server wallet operations for the x402 auction system:
- * - Initialize server wallet (CDP or raw private key)
+ * - Initialize server wallet (private key)
  * - Send USDC refunds to outbid agents (REFUND-AS-SIGNAL pattern)
  * - Check wallet balances
- * - Request testnet faucet funds
  *
  * REFUND-AS-SIGNAL IMPLEMENTATION:
  * When an agent is outbid, we immediately send their USDC back.
@@ -13,13 +12,9 @@
  * This eliminates the need for polling APIs or webhook infrastructure.
  */
 
-import { CdpClient } from '@coinbase/cdp-sdk';
 import { encodeFunctionData, createPublicClient, http, createWalletClient, publicActions } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-
-let cdp: CdpClient;
-let serverAccount: Awaited<ReturnType<CdpClient['evm']['getAccount']>> | undefined;
 
 // ERC-20 ABI for transfer function
 const ERC20_ABI = [
@@ -44,43 +39,6 @@ const ERC20_ABI = [
 
 const USDC_BASE_SEPOLIA = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 
-/**
- * Initialize the server wallet using Coinbase CDP
- *
- * This wallet is used to:
- * - Receive payments from winning bids
- * - Send refunds to outbid agents
- *
- * @returns {Object} CDP client and server account
- * @throws {Error} If SERVER_WALLET_ADDRESS is not set or CDP initialization fails
- */
-export async function initializeWallet() {
-  if (cdp && serverAccount) {
-    return { cdp, serverAccount };
-  }
-
-  // Initialize CDP client (automatically loads from environment variables)
-  cdp = new CdpClient();
-
-  // Get the existing server account by address (used for bid refunds)
-  const serverAddress = process.env.SERVER_WALLET_ADDRESS;
-  if (!serverAddress) {
-    throw new Error('SERVER_WALLET_ADDRESS not set in environment');
-  }
-
-  serverAccount = await cdp.evm.getAccount({
-    address: serverAddress as `0x${string}`
-  });
-
-  if (!serverAccount) {
-    throw new Error('Failed to initialize server account from CDP');
-  }
-
-  console.log(`✅ Server wallet initialized: ${serverAccount.address}`);
-
-  return { cdp, serverAccount };
-}
-
 export async function getServerWalletClient() {
   const serverPrivateKey = process.env.SERVER_WALLET_PRIVATE_KEY;
   if (!serverPrivateKey) {
@@ -101,7 +59,7 @@ export async function getServerWalletClient() {
 }
 
 export async function getWalletBalance(): Promise<{ eth: string; usdc: string }> {
-  const { serverAccount } = await initializeWallet();
+  const walletClient = await getServerWalletClient();
 
   // Create public client to read balances
   const publicClient = createPublicClient({
@@ -111,7 +69,7 @@ export async function getWalletBalance(): Promise<{ eth: string; usdc: string }>
 
   // Get ETH balance
   const ethBalance = await publicClient.getBalance({
-    address: serverAccount.address as `0x${string}`,
+    address: walletClient.account.address,
   });
 
   // Get USDC balance
@@ -119,7 +77,7 @@ export async function getWalletBalance(): Promise<{ eth: string; usdc: string }>
     address: USDC_BASE_SEPOLIA,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
-    args: [serverAccount.address as `0x${string}`],
+    args: [walletClient.account.address],
   });
 
   return {
@@ -175,23 +133,4 @@ export async function sendRefund(
   console.log(`✅ Refund sent! Tx: https://sepolia.basescan.org/tx/${txHash}`);
 
   return txHash;
-}
-
-export async function fundWalletFromFaucet(
-  network: 'base-sepolia' = 'base-sepolia',
-  token: 'eth' | 'usdc' = 'eth'
-): Promise<string> {
-  const { cdp, serverAccount } = await initializeWallet();
-
-  console.log(`🚰 Requesting ${token.toUpperCase()} from faucet for ${serverAccount.address}...`);
-
-  const { transactionHash } = await cdp.evm.requestFaucet({
-    address: serverAccount.address,
-    network,
-    token,
-  });
-
-  console.log(`✅ Faucet funded! Tx: https://sepolia.basescan.org/tx/${transactionHash}`);
-
-  return transactionHash;
 }

@@ -3,6 +3,22 @@ import { getAdSpotRecord, updateAdSpotRecord } from '@/lib/db';
 import { sendRefund } from '@/lib/wallet';
 import { broadcastEvent } from '@/lib/events';
 
+// Helper function to get wallet logo for winning agent
+function getAgentAdImageUrl(agentId: string): string {
+  const brandMap: Record<string, string> = {
+    'CDP Agent': '/coinbase.png',
+    'Crossmint Agent': '/crossmint.png',
+    'CDP': '/coinbase.png',
+    'Crossmint': '/crossmint.png',
+    // Legacy support
+    'IceCo': '/coinbase.png',
+    'FizzUp': '/crossmint.png',
+    'AgentA': '/coinbase.png',
+    'AgentB': '/crossmint.png',
+  };
+  return brandMap[agentId] || '/coinbase.png';
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ adSpotId: string }> }
@@ -21,21 +37,30 @@ export async function POST(
   try {
     const bidRecord = await getAdSpotRecord(adSpotId);
 
+    // If no auction record exists yet, the agent hasn't placed any bids
+    // This is expected if agent starts with 0 balance - no withdrawal needed
     if (!bidRecord) {
-      return NextResponse.json(
-        { error: 'No auction found for this adSpotId' },
-        { status: 404 }
-      );
+      console.log(`ℹ️  [${agentId}] No auction record yet - agent has not placed any bids`);
+      return NextResponse.json({
+        success: true,
+        refunded: 0,
+        message: 'No withdrawal needed - you have not placed any bids yet',
+        auctionEnded: false,
+      });
     }
 
     // Find the agent's last bid in history
     const agentBids = bidRecord.bidHistory.filter(bid => bid.agentId === agentId);
 
+    // If agent has no bid history, no refund is needed
     if (agentBids.length === 0) {
-      return NextResponse.json(
-        { error: 'No bids found for this agent' },
-        { status: 404 }
-      );
+      console.log(`ℹ️  [${agentId}] No bid history - no withdrawal needed`);
+      return NextResponse.json({
+        success: true,
+        refunded: 0,
+        message: 'No withdrawal needed - you have not placed any bids',
+        auctionEnded: false,
+      });
     }
 
     const lastBid = agentBids[agentBids.length - 1];
@@ -95,6 +120,11 @@ export async function POST(
     if (activeAgents <= 1) {
       console.log(`🏁 Auction ending - only ${activeAgents} active bidder(s) remaining`);
 
+      // Get winner's ad image URL
+      const winnerAdImage = bidRecord.currentWinner?.agentId
+        ? getAgentAdImageUrl(bidRecord.currentWinner.agentId)
+        : undefined;
+
       // Broadcast auction end event
       broadcastEvent(adSpotId, {
         type: 'auction_ended',
@@ -104,11 +134,27 @@ export async function POST(
         timestamp: new Date().toISOString(),
       });
 
+      // Broadcast ad image ready event
+      if (winnerAdImage && bidRecord.currentWinner) {
+        broadcastEvent(adSpotId, {
+          type: 'ad_image_ready',
+          winner: bidRecord.currentWinner,
+          imageUrl: winnerAdImage,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       // Mark auction as ended
       await updateAdSpotRecord(adSpotId, {
         auctionEnded: true,
         auctionEndReason: 'withdrawal',
+        status: 'ended',
+        winnerAdImage,
       });
+
+      if (winnerAdImage) {
+        console.log(`🖼️  [REFUND] Winner ad image set: ${winnerAdImage}`);
+      }
     }
 
     return NextResponse.json({

@@ -11,20 +11,24 @@ export default function AdSpotDisplay({ adSpotId }: AdSpotDisplayProps) {
   const [adData, setAdData] = useState<{
     winner?: string;
     auctionEnded?: boolean;
+    winnerAdImage?: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Map brand names to their static ad images
+  // Map agent names to their wallet provider logos
   const getBrandAdImage = (winner: string): string => {
     const brandMap: Record<string, string> = {
-      'IceCo': '/iceco.png',
-      'FizzUp': '/fizzup.png',
-      'AgentA': '/iceco.png',
-      'AgentB': '/fizzup.png',
-      'Coinbase CDP': '/coinbase.png',
+      'CDP Agent': '/coinbase.png',
+      'Crossmint Agent': '/crossmint.png',
+      'CDP': '/coinbase.png',
       'Crossmint': '/crossmint.png',
+      // Legacy support for old agent names
+      'IceCo': '/coinbase.png',
+      'FizzUp': '/crossmint.png',
+      'AgentA': '/coinbase.png',
+      'AgentB': '/crossmint.png',
     };
-    return brandMap[winner] || '/iceco.png';
+    return brandMap[winner] || '/coinbase.png';
   };
 
   useEffect(() => {
@@ -35,7 +39,8 @@ export default function AdSpotDisplay({ adSpotId }: AdSpotDisplayProps) {
 
       setAdData({
         winner: data.currentWinner?.agentId,
-        auctionEnded: data.auctionEnded
+        auctionEnded: data.auctionEnded,
+        winnerAdImage: data.winnerAdImage
       });
       setLoading(false);
     };
@@ -58,7 +63,8 @@ export default function AdSpotDisplay({ adSpotId }: AdSpotDisplayProps) {
 
   // Show winner's brand ad if auction ended and there's a winner
   if (adData?.auctionEnded && adData?.winner) {
-    const brandImage = getBrandAdImage(adData.winner);
+    // Use winnerAdImage if available, otherwise fall back to static brand image
+    const adImage = adData.winnerAdImage || getBrandAdImage(adData.winner);
 
     return (
       <div className="w-full max-w-2xl mx-auto">
@@ -68,12 +74,13 @@ export default function AdSpotDisplay({ adSpotId }: AdSpotDisplayProps) {
           </div>
           <div className="relative w-full bg-white" style={{ maxHeight: '320px' }}>
             <Image
-              src={brandImage}
+              src={adImage}
               alt={`Ad by ${adData.winner}`}
               width={1200}
               height={800}
               className="w-full h-auto object-contain p-8"
               style={{ maxHeight: '320px' }}
+              unoptimized={adData.winnerAdImage ? true : false}
             />
           </div>
           <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2 z-10">

@@ -9,13 +9,17 @@
     "lint": "eslint",
     "agent:ai:a": "tsx agents/intelligentAgentA.ts",
     "agent:ai:b": "tsx agents/intelligentAgentB.ts",
-    "fund:agents": "tsx fund-agents.ts",
+    "agents:both": "concurrently -n \"coinbase,crossmint\" -c \"blue,green\" \"npm run agent:ai:a\" \"npm run agent:ai:b\"",
     "check:server": "tsx check-server-balance.ts",
     "check:env": "tsx scripts/check-env.ts",
-    "setup:help": "tsx scripts/setup-help.ts"
+    "setup:help": "tsx scripts/setup-help.ts",
+    "test:wallet:cdp": "tsx scripts/test-cdp-wallet.ts",
+    "test:wallet:crossmint": "tsx scripts/test-crossmint-wallet.ts",
+    "deploy:crossmint": "tsx scripts/deploy-crossmint-wallet-simple.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.4",
+    "@crossmint/wallets-sdk": "^0.16.2",
     "@hono/node-server": "^1.19.5",
     "@llamaindex/anthropic": "^0.3.26",
     "@wagmi/core": "^2.22.1",
@@ -38,6 +42,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.6",
     "tailwindcss": "^4",

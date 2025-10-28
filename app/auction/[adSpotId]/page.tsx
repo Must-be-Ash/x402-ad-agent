@@ -3,6 +3,10 @@
 import { use, useEffect, useState, useMemo } from 'react';
 import AdSpotDisplay from '@/app/components/AdSpotDisplay';
 import TerminalPanel from '@/app/components/TerminalPanel';
+import Breadcrumbs from '@/app/components/Breadcrumbs';
+import AuctionInfoPanel from '@/app/components/AuctionInfoPanel';
+import PostAuctionCTA from '@/app/components/PostAuctionCTA';
+import LoadingSpinner from '@/app/components/LoadingSpinner';
 
 interface Winner {
   agentId: string;
@@ -39,6 +43,13 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
   const [auctionEndTime, setAuctionEndTime] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [auctionEnded, setAuctionEnded] = useState(false);
+  const [winner, setWinner] = useState<Winner | null>(null);
+  const [finalBid, setFinalBid] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'cdp' | 'crossmint'>('cdp');
+  const [showPostAuctionModal, setShowPostAuctionModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [agentBalances, setAgentBalances] = useState<Record<string, number>>({});
+  const [agentAddresses, setAgentAddresses] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -144,6 +155,11 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
               finalBid: data.finalBid,
               endReason: data.reason,
             }]);
+            setWinner(data.winner);
+            setFinalBid(data.finalBid);
+            setAuctionEnded(true);
+            // Show modal after 1 second
+            setTimeout(() => setShowPostAuctionModal(true), 1000);
             break;
 
           case 'ad_image_ready':
@@ -187,6 +203,10 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
           // Set auction ended status
           if (data.auctionEnded) {
             setAuctionEnded(true);
+            if (data.currentWinner) {
+              setWinner(data.currentWinner);
+              setFinalBid(data.currentBid);
+            }
           }
 
           // Load existing messages from history
@@ -208,6 +228,12 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
             });
             setMessages(historicalMessages);
           }
+
+          setIsLoading(false);
+        })
+        .catch(err => {
+          console.error('Failed to fetch initial state:', err);
+          setIsLoading(false);
         });
 
       // Handle connection errors and reconnect
@@ -255,6 +281,31 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
     return () => clearInterval(interval);
   }, [adSpotId]);
 
+  // Poll for agent wallet balances and addresses
+  useEffect(() => {
+    const pollBalances = () => {
+      fetch('/api/balances')
+        .then(res => res.json())
+        .then(data => {
+          if (data.balances) {
+            setAgentBalances(data.balances);
+          }
+          if (data.addresses) {
+            setAgentAddresses(data.addresses);
+          }
+        })
+        .catch(err => console.error('Failed to poll balances:', err));
+    };
+
+    // Fetch immediately
+    pollBalances();
+
+    // Poll every 3 seconds
+    const interval = setInterval(pollBalances, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Countdown timer effect
   useEffect(() => {
     if (!auctionEndTime || auctionEnded) {
@@ -284,8 +335,9 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
   }, [auctionEndTime, auctionEnded]);
 
   const getBrandName = (agentId: string) => {
-    if (agentId === 'IceCo' || agentId === 'AgentA') return 'IceCo';
-    if (agentId === 'FizzUp' || agentId === 'AgentB') return 'FizzUp';
+    // Map agent IDs to standardized brand names
+    if (agentId === 'CDP Agent' || agentId === 'CDP' || agentId === 'IceCo' || agentId === 'AgentA' || agentId === 'Coinbase') return 'CDP Agent';
+    if (agentId === 'Crossmint Agent' || agentId === 'Crossmint' || agentId === 'FizzUp' || agentId === 'AgentB') return 'Crossmint Agent';
     return agentId;
   };
 
@@ -437,8 +489,8 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
   };
 
   // Split messages by agent
-  const { iceCoLogs, fizzUpLogs } = useMemo(() => {
-    const iceCoLogs: Array<{
+  const { cdpLogs, crossmintLogs } = useMemo(() => {
+    const cdpLogs: Array<{
       timestamp: string;
       type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
       icon: string;
@@ -446,7 +498,7 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
       details?: string;
       link?: { href: string; label: string };
     }> = [];
-    const fizzUpLogs: Array<{
+    const crossmintLogs: Array<{
       timestamp: string;
       type: 'info' | 'success' | 'payment' | 'error' | 'tool' | 'thinking';
       icon: string;
@@ -457,48 +509,80 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
 
     messages.forEach(msg => {
       const brandName = getBrandName(msg.agentId || '');
-      if (brandName === 'IceCo' || msg.type === 'auction_ended') {
-        iceCoLogs.push(...messageToTerminalLog(msg));
+      if (brandName === 'CDP Agent' || msg.type === 'auction_ended') {
+        cdpLogs.push(...messageToTerminalLog(msg));
       }
-      if (brandName === 'FizzUp' || msg.type === 'auction_ended') {
-        fizzUpLogs.push(...messageToTerminalLog(msg));
+      if (brandName === 'Crossmint Agent' || msg.type === 'auction_ended') {
+        crossmintLogs.push(...messageToTerminalLog(msg));
       }
     });
 
-    return { iceCoLogs, fizzUpLogs };
+    return { cdpLogs, crossmintLogs };
   }, [messages]);
 
-  return (
-    <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
-      {/* AD BANNER AT TOP */}
-      <div className="w-full bg-[#2a2a2a] border-b border-[#333333]">
-        <div className="max-w-6xl mx-auto p-4">
-          <AdSpotDisplay adSpotId={adSpotId} />
-        </div>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
+        <LoadingSpinner size="lg" message="Loading auction..." />
       </div>
+    );
+  }
+
+  return (
+    <div className="h-screen bg-[#1a1a1a] flex flex-col overflow-hidden">
+      <main id="main-content" className="flex flex-col h-full overflow-hidden">
+        {/* AD BANNER AT TOP */}
+        <div className="w-full bg-[#2a2a2a] border-b border-[#333333] flex-shrink-0" role="banner" aria-label="Advertisement display">
+          <div className="max-w-6xl mx-auto p-4">
+            <AdSpotDisplay adSpotId={adSpotId} />
+          </div>
+        </div>
 
       {/* Header */}
-      <div className="bg-[#2a2a2a] border-b border-[#333333] px-6 py-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between">
+      <div className="bg-[#2a2a2a] border-b border-[#333333] px-4 sm:px-6 py-4 flex-shrink-0">
+        <div className="max-w-7xl mx-auto">
+          {/* Breadcrumbs */}
+          <Breadcrumbs
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Live Demo', href: '/auction/demo-spot-1' },
+              { label: adSpotId },
+            ]}
+          />
+
+          {/* Header Content */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-4">
             <div>
-              <h1 className="text-[#ffffff] text-xl font-semibold">
-                {adSpotId}
-              </h1>
-              <p className="text-[#888888] text-sm">Ad Spot Auction</p>
+              <div className="flex items-center gap-3">
+                <h1 className="text-[#ffffff] text-xl sm:text-2xl font-semibold">
+                  {adSpotId}
+                </h1>
+                {!auctionEnded ? (
+                  <div className="flex items-center gap-2 px-2 py-1 bg-green-900/30 border border-green-700/50 rounded-full">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-xs font-medium text-green-400">Live</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-2 py-1 bg-red-900/30 border border-red-700/50 rounded-full">
+                    <span className="text-xs font-medium text-red-400">Ended</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-[#888888] text-sm mt-1">Ad Spot Auction</p>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="text-right">
+
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div className="text-center sm:text-right">
                 <div className="text-[#888888] text-xs uppercase tracking-wide">Current Bid</div>
-                <div className="text-[#ffffff] text-2xl font-bold">
+                <div className="text-[#ffffff] text-xl sm:text-2xl font-bold">
                   ${currentBid?.toFixed(2) || '0.00'}
                 </div>
               </div>
 
               {/* Timer */}
-              <div className="text-right">
-                <div className="text-[#888888] text-xs uppercase tracking-wide">Time Remaining</div>
-                <div className={`text-2xl font-bold ${
+              <div className="text-center sm:text-right">
+                <div className="text-[#888888] text-xs uppercase tracking-wide">Time Left</div>
+                <div className={`text-xl sm:text-2xl font-bold ${
                   auctionEnded
                     ? 'text-red-500'
                     : timeRemaining !== null && timeRemaining <= 60
@@ -516,34 +600,100 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
                   )}
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       </div>
 
-      {/* Dual Terminal View */}
-      <div className="flex-1 overflow-hidden px-6 py-6">
-        <div className="max-w-7xl mx-auto h-full">
-          <div className="grid grid-cols-2 gap-4 h-full">
-            {/* IceCo Terminal */}
-            <TerminalPanel
-              brandName="IceCo"
-              logs={iceCoLogs}
-              color="blue"
-              logoPath="/iceco.png"
-            />
+      {/* Info Panel and Terminals */}
+      <div className="flex-1 overflow-hidden px-4 sm:px-6 py-6 min-h-0">
+        <div className="max-w-7xl mx-auto h-full flex flex-col min-h-0">
+          {/* Info Panel */}
+          <div className="flex-shrink-0">
+            <AuctionInfoPanel />
+          </div>
 
-            {/* FizzUp Terminal */}
-            <TerminalPanel
-              brandName="FizzUp"
-              logs={fizzUpLogs}
-              color="green"
-              logoPath="/fizzup.png"
-            />
+          {/* Mobile: Tabs */}
+          <div className="md:hidden mb-4 flex-shrink-0">
+            <div className="flex gap-2 border-b border-[#333]">
+              <button
+                onClick={() => setActiveTab('cdp')}
+                className={`flex-1 px-4 py-3 font-medium transition-colors ${
+                  activeTab === 'cdp'
+                    ? 'text-blue-400 border-b-2 border-blue-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                CDP Agent
+              </button>
+              <button
+                onClick={() => setActiveTab('crossmint')}
+                className={`flex-1 px-4 py-3 font-medium transition-colors ${
+                  activeTab === 'crossmint'
+                    ? 'text-green-400 border-b-2 border-green-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Crossmint Agent
+              </button>
+            </div>
+          </div>
+
+          {/* Dual Terminal View (Desktop) / Single Terminal View (Mobile) */}
+          <div className="flex-1 overflow-hidden min-h-0">
+            {/* Desktop: Side by Side */}
+            <div className="hidden md:grid md:grid-cols-2 gap-4 h-full">
+              <TerminalPanel
+                brandName="CDP Agent"
+                logs={cdpLogs}
+                color="blue"
+                logoPath="/coinbase.png"
+                balance={agentBalances['CDP Agent'] || agentBalances['CDP'] || agentBalances['Coinbase']}
+                walletAddress={agentAddresses['CDP Agent'] || agentAddresses['CDP'] || agentAddresses['Coinbase']}
+              />
+              <TerminalPanel
+                brandName="Crossmint Agent"
+                logs={crossmintLogs}
+                color="green"
+                logoPath="/crossmint.png"
+                balance={agentBalances['Crossmint Agent'] || agentBalances['Crossmint']}
+                walletAddress={agentAddresses['Crossmint Agent'] || agentAddresses['Crossmint']}
+              />
+            </div>
+
+            {/* Mobile: Tabbed View */}
+            <div className="md:hidden h-full">
+              {activeTab === 'cdp' ? (
+                <TerminalPanel
+                  brandName="CDP Agent"
+                  logs={cdpLogs}
+                  color="blue"
+                  logoPath="/coinbase.png"
+                  balance={agentBalances['CDP Agent'] || agentBalances['CDP'] || agentBalances['Coinbase']}
+                  walletAddress={agentAddresses['CDP Agent'] || agentAddresses['CDP'] || agentAddresses['Coinbase']}
+                />
+              ) : (
+                <TerminalPanel
+                  brandName="Crossmint Agent"
+                  logs={crossmintLogs}
+                  color="green"
+                  logoPath="/crossmint.png"
+                  balance={agentBalances['Crossmint Agent'] || agentBalances['Crossmint']}
+                  walletAddress={agentAddresses['Crossmint Agent'] || agentAddresses['Crossmint']}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Post Auction Modal */}
+      {showPostAuctionModal && winner && (
+        <div id="post-auction-modal" role="dialog" aria-modal="true" aria-labelledby="auction-complete-title">
+          <PostAuctionCTA winner={winner} finalBid={finalBid || undefined} />
+        </div>
+      )}
+      </main>
     </div>
   );
 }

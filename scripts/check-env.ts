@@ -84,29 +84,66 @@ console.log();
 // ============================================
 console.log('🤖 Checking agent configuration...');
 
-const agentAKey = process.env.AGENT_A_PRIVATE_KEY;
-const agentBKey = process.env.AGENT_B_PRIVATE_KEY;
+// Agent A - CDP Wallet
+const cdpApiKeyId = process.env.CDP_API_KEY_ID;
+const cdpApiKeySecret = process.env.CDP_API_KEY_SECRET;
+const cdpWalletSecret = process.env.CDP_WALLET_SECRET;
+const agentACdpWalletId = process.env.AGENT_A_CDP_WALLET_ID;
+
+if (!cdpApiKeyId) {
+  result.errors.push('CDP_API_KEY_ID is not set (required for Agent A)');
+  result.valid = false;
+} else {
+  console.log('  ✅ CDP_API_KEY_ID is set');
+}
+
+if (!cdpApiKeySecret) {
+  result.errors.push('CDP_API_KEY_SECRET is not set (required for Agent A)');
+  result.valid = false;
+} else {
+  console.log('  ✅ CDP_API_KEY_SECRET is set');
+}
+
+if (!cdpWalletSecret) {
+  result.errors.push('CDP_WALLET_SECRET is not set (required for Agent A)');
+  result.valid = false;
+} else if (cdpWalletSecret === 'secret' || cdpWalletSecret.length < 10) {
+  result.errors.push('CDP_WALLET_SECRET appears to be a placeholder');
+  result.valid = false;
+} else {
+  console.log('  ✅ CDP_WALLET_SECRET is set');
+}
+
+if (!agentACdpWalletId) {
+  result.warnings.push('AGENT_A_CDP_WALLET_ID is not set. A new CDP wallet will be created on first run.');
+  console.log('  ℹ️  AGENT_A_CDP_WALLET_ID not set (will create new wallet)');
+} else {
+  console.log('  ✅ AGENT_A_CDP_WALLET_ID is set');
+}
+
+// Agent B - Crossmint Wallet
+const crossmintApiKey = process.env.AGENT_B_CROSSMINT_API_KEY;
+const crossmintWalletLocator = process.env.AGENT_B_CROSSMINT_WALLET_LOCATOR;
+
+if (!crossmintApiKey) {
+  result.errors.push('AGENT_B_CROSSMINT_API_KEY is not set (required for Agent B)');
+  result.valid = false;
+} else {
+  console.log('  ✅ AGENT_B_CROSSMINT_API_KEY is set');
+}
+
+if (!crossmintWalletLocator) {
+  result.errors.push('AGENT_B_CROSSMINT_WALLET_LOCATOR is not set (required for Agent B)');
+  result.valid = false;
+} else if (!crossmintWalletLocator.startsWith('email:')) {
+  result.warnings.push('AGENT_B_CROSSMINT_WALLET_LOCATOR format looks incorrect (should start with email:)');
+  console.log('  ⚠️  AGENT_B_CROSSMINT_WALLET_LOCATOR format looks incorrect');
+} else {
+  console.log('  ✅ AGENT_B_CROSSMINT_WALLET_LOCATOR is set');
+}
+
+// Anthropic API Key
 const anthropicKey = process.env.BID_ANTHROPIC_API_KEY;
-
-if (!agentAKey) {
-  result.errors.push('AGENT_A_PRIVATE_KEY is not set in agents/.env');
-  result.valid = false;
-} else if (!/^0x[a-fA-F0-9]{64}$/.test(agentAKey)) {
-  result.errors.push('AGENT_A_PRIVATE_KEY has invalid format');
-  result.valid = false;
-} else {
-  console.log('  ✅ AGENT_A_PRIVATE_KEY is set and valid format');
-}
-
-if (!agentBKey) {
-  result.errors.push('AGENT_B_PRIVATE_KEY is not set in agents/.env');
-  result.valid = false;
-} else if (!/^0x[a-fA-F0-9]{64}$/.test(agentBKey)) {
-  result.errors.push('AGENT_B_PRIVATE_KEY has invalid format');
-  result.valid = false;
-} else {
-  console.log('  ✅ AGENT_B_PRIVATE_KEY is set and valid format');
-}
 
 if (!anthropicKey) {
   result.warnings.push('BID_ANTHROPIC_API_KEY is not set. AI agents will not work.');
