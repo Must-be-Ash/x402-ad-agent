@@ -243,6 +243,16 @@ export class IntelligentBiddingAgent {
           // Use the provided adSpotId or fall back to current ad spot
           const adSpotId = input.adSpotId || this.currentAdSpotId;
 
+          // PARAMETER VALIDATION: Check if proposedAmount is defined and valid
+          if (typeof input.proposedAmount !== 'number' || isNaN(input.proposedAmount) || input.proposedAmount <= 0) {
+            console.log(`❌ [${this.agentName}] Invalid proposedAmount: ${input.proposedAmount}`);
+            return JSON.stringify({
+              success: false,
+              invalidAmount: true,
+              message: `You must provide a valid positive number for proposedAmount. Received: ${input.proposedAmount}`
+            });
+          }
+
           // BUDGET VALIDATION: Check if bid exceeds maximum budget
           if (input.proposedAmount > this.maxBid) {
             console.log(`❌ [${this.agentName}] Bid ${input.proposedAmount.toFixed(2)} exceeds max budget ${this.maxBid.toFixed(2)}`);
