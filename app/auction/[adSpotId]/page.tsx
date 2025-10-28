@@ -38,182 +38,205 @@ export default function AuctionPageStreaming({ params }: { params: Promise<{ adS
   const [currentBid, setCurrentBid] = useState<number | null>(null);
 
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
+    // Load initial state from status API
+    const loadInitialState = async () => {
+      try {
+        const response = await fetch(`/api/status?adSpotId=${encodeURIComponent(adSpotId)}`);
+        const data = await response.json();
 
-    const connect = () => {
-      // Connect to SSE stream
-      eventSource = new EventSource(`/api/stream/${encodeURIComponent(adSpotId)}`);
+        setCurrentBid(data.currentBid);
 
-      eventSource.addEventListener('message', (e) => {
-        const data = JSON.parse(e.data);
-
-        switch (data.type) {
-          case 'agent_status':
-            // No longer needed - we show everything in terminal
-            break;
-
-          case 'thinking':
-            setMessages(prev => [...prev, {
-              id: `${data.agentId}-thinking-${Date.now()}`,
-              type: 'thinking',
-              agentId: data.agentId,
-              timestamp: data.timestamp,
-              thinking: data.thinking,
-              strategy: data.strategy,
-              proposedAmount: data.proposedAmount,
-            }]);
-            break;
-
-          case 'bid_placed':
-            // Keep the thinking bubble and add bid card below it
-            // Check if this bid already exists (prevent duplicates)
-            setMessages(prev => {
-              const bidExists = prev.some(msg =>
-                msg.type === 'bid' &&
-                msg.agentId === data.agentId &&
-                msg.transactionHash === data.transactionHash
-              );
-
-              if (bidExists) {
-                return prev; // Don't add duplicate
-              }
-
-              return [...prev, {
-                id: `${data.agentId}-bid-${Date.now()}`,
-                type: 'bid',
-                agentId: data.agentId,
-                timestamp: data.timestamp,
-                amount: data.amount,
-                transactionHash: data.transactionHash,
-                isLoading: true, // Waiting for reflection
-              }];
+        // Load existing messages from history
+        if (data.bidHistory) {
+          const historicalMessages: StreamingMessage[] = [];
+          data.bidHistory.forEach((bid: { agentId: string; timestamp: string; amount: number; txHash: string; reflection?: string }) => {
+            historicalMessages.push({
+              id: `${bid.agentId}-bid-${bid.timestamp}`,
+              type: 'bid',
+              agentId: bid.agentId,
+              timestamp: bid.timestamp,
+              amount: bid.amount,
+              transactionHash: bid.txHash,
+              reflection: bid.reflection,
+              isLoading: !bid.reflection,
             });
-            setCurrentBid(data.amount);
-            break;
-
-          case 'reflection':
-            // Update the corresponding bid with reflection
-            setMessages(prev => prev.map(msg => {
-              if (msg.type === 'bid' && msg.agentId === data.agentId && msg.isLoading) {
-                return {
-                  ...msg,
-                  reflection: data.reflection,
-                  isLoading: false,
-                };
-              }
-              return msg;
-            }));
-            break;
-
-          case 'refund':
-            // Add refund notification
-            setMessages(prev => [...prev, {
-              id: `${data.agentId}-refund-${Date.now()}`,
-              type: 'refund',
-              agentId: data.agentId,
-              timestamp: data.timestamp,
-              refundAmount: data.amount,
-              transactionHash: data.transactionHash,
-            }]);
-            break;
-
-          case 'withdrawal':
-            // Add withdrawal notification
-            setMessages(prev => [...prev, {
-              id: `${data.agentId}-withdrawal-${Date.now()}`,
-              type: 'withdrawal',
-              agentId: data.agentId,
-              timestamp: data.timestamp,
-              refundAmount: data.amount,
-              reasoning: data.reasoning,
-              transactionHash: data.transactionHash,
-            }]);
-            break;
-
-          case 'auction_ended':
-            // Add auction ended notification
-            setMessages(prev => [...prev, {
-              id: `auction-ended-${Date.now()}`,
-              type: 'auction_ended',
-              timestamp: data.timestamp,
-              winner: data.winner,
-              finalBid: data.finalBid,
-              endReason: data.reason,
-            }]);
-            break;
-
-          case 'ad_image_ready':
-            // Add ad image ready notification
-            setMessages(prev => [...prev, {
-              id: `ad-image-ready-${Date.now()}`,
-              type: 'ad_image_ready',
-              timestamp: data.timestamp || new Date().toISOString(),
-              agentId: data.winner?.agentId,
-              imageUrl: data.imageUrl,
-            }]);
-            break;
-
-          case 'image_generation_update':
-            // Add image generation status update
-            setMessages(prev => [...prev, {
-              id: `image-gen-${Date.now()}`,
-              type: 'image_generation_update',
-              timestamp: data.timestamp || new Date().toISOString(),
-              agentId: data.agentId,
-              status: data.status,
-              message: data.message,
-              imageUrl: data.imageUrl,
-              taskId: data.taskId,
-            }]);
-            break;
+          });
+          setMessages(historicalMessages);
         }
-      });
-
-      // Also poll for initial state
-      fetch(`/api/status?adSpotId=${encodeURIComponent(adSpotId)}`)
-        .then(res => res.json())
-        .then(data => {
-          setCurrentBid(data.currentBid);
-
-          // Load existing messages from history
-          if (data.bidHistory) {
-            const historicalMessages: StreamingMessage[] = [];
-            data.bidHistory.forEach((bid: { agentId: string; timestamp: string; amount: number; txHash: string; reflection?: string }) => {
-              // Only add bid cards for historical data (not thinking bubbles)
-              // Thinking bubbles are only shown for live events via SSE
-              historicalMessages.push({
-                id: `${bid.agentId}-bid-${bid.timestamp}`,
-                type: 'bid',
-                agentId: bid.agentId,
-                timestamp: bid.timestamp,
-                amount: bid.amount,
-                transactionHash: bid.txHash,
-                reflection: bid.reflection,
-                isLoading: !bid.reflection,
-              });
-            });
-            setMessages(historicalMessages);
-          }
-        });
-
-      // Handle connection errors and reconnect
-      eventSource.onerror = () => {
-        console.log('SSE connection lost, reconnecting in 3s...');
-        eventSource?.close();
-        reconnectTimeout = setTimeout(connect, 3000);
-      };
+      } catch (error) {
+        console.error('Failed to load initial state:', error);
+      }
     };
 
-    connect();
+    loadInitialState();
+
+    // Poll for new events using MongoDB polling
+    let lastFetched: string | null = null;
+    let isPolling = true;
+    const seenEventIds = new Set<string>();
+
+    const processEvent = (data: any) => {
+      // Create unique ID for deduplication
+      const eventId = `${data.type}-${data.agentId || 'system'}-${data.timestamp}-${data.transactionHash || Date.now()}`;
+
+      if (seenEventIds.has(eventId)) {
+        return; // Skip duplicate
+      }
+      seenEventIds.add(eventId);
+
+      switch (data.type) {
+        case 'agent_status':
+          // No longer needed - we show everything in terminal
+          break;
+
+        case 'thinking':
+          setMessages(prev => [...prev, {
+            id: `${data.agentId}-thinking-${Date.now()}`,
+            type: 'thinking',
+            agentId: data.agentId,
+            timestamp: data.timestamp,
+            thinking: data.thinking,
+            strategy: data.strategy,
+            proposedAmount: data.proposedAmount,
+          }]);
+          break;
+
+        case 'bid_placed':
+          // Keep the thinking bubble and add bid card below it
+          // Check if this bid already exists (prevent duplicates)
+          setMessages(prev => {
+            const bidExists = prev.some(msg =>
+              msg.type === 'bid' &&
+              msg.agentId === data.agentId &&
+              msg.transactionHash === data.transactionHash
+            );
+
+            if (bidExists) {
+              return prev; // Don't add duplicate
+            }
+
+            return [...prev, {
+              id: `${data.agentId}-bid-${Date.now()}`,
+              type: 'bid',
+              agentId: data.agentId,
+              timestamp: data.timestamp,
+              amount: data.amount,
+              transactionHash: data.transactionHash,
+              isLoading: true, // Waiting for reflection
+            }];
+          });
+          setCurrentBid(data.amount);
+          break;
+
+        case 'reflection':
+          // Update the corresponding bid with reflection
+          setMessages(prev => prev.map(msg => {
+            if (msg.type === 'bid' && msg.agentId === data.agentId && msg.isLoading) {
+              return {
+                ...msg,
+                reflection: data.reflection,
+                isLoading: false,
+              };
+            }
+            return msg;
+          }));
+          break;
+
+        case 'refund':
+          // Add refund notification
+          setMessages(prev => [...prev, {
+            id: `${data.agentId}-refund-${Date.now()}`,
+            type: 'refund',
+            agentId: data.agentId,
+            timestamp: data.timestamp,
+            refundAmount: data.amount,
+            transactionHash: data.transactionHash,
+          }]);
+          break;
+
+        case 'withdrawal':
+          // Add withdrawal notification
+          setMessages(prev => [...prev, {
+            id: `${data.agentId}-withdrawal-${Date.now()}`,
+            type: 'withdrawal',
+            agentId: data.agentId,
+            timestamp: data.timestamp,
+            refundAmount: data.amount,
+            reasoning: data.reasoning,
+            transactionHash: data.transactionHash,
+          }]);
+          break;
+
+        case 'auction_ended':
+          // Add auction ended notification
+          setMessages(prev => [...prev, {
+            id: `auction-ended-${Date.now()}`,
+            type: 'auction_ended',
+            timestamp: data.timestamp,
+            winner: data.winner,
+            finalBid: data.finalBid,
+            endReason: data.reason,
+          }]);
+          break;
+
+        case 'ad_image_ready':
+          // Add ad image ready notification
+          setMessages(prev => [...prev, {
+            id: `ad-image-ready-${Date.now()}`,
+            type: 'ad_image_ready',
+            timestamp: data.timestamp || new Date().toISOString(),
+            agentId: data.winner?.agentId,
+            imageUrl: data.imageUrl,
+          }]);
+          break;
+
+        case 'image_generation_update':
+          // Add image generation status update
+          setMessages(prev => [...prev, {
+            id: `image-gen-${Date.now()}`,
+            type: 'image_generation_update',
+            timestamp: data.timestamp || new Date().toISOString(),
+            agentId: data.agentId,
+            status: data.status,
+            message: data.message,
+            imageUrl: data.imageUrl,
+            taskId: data.taskId,
+          }]);
+          break;
+      }
+    };
+
+    const pollEvents = async () => {
+      if (!isPolling) return;
+
+      try {
+        const url = lastFetched
+          ? `/api/events/${encodeURIComponent(adSpotId)}?since=${encodeURIComponent(lastFetched)}`
+          : `/api/events/${encodeURIComponent(adSpotId)}`;
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success && result.events) {
+          // Process each event
+          result.events.forEach((event: any) => {
+            processEvent(event);
+          });
+
+          // Update timestamp for next poll
+          lastFetched = result.timestamp;
+        }
+      } catch (error) {
+        console.error('Error polling events:', error);
+      }
+    };
+
+    // Start polling every 2 seconds
+    const pollInterval = setInterval(pollEvents, 2000);
 
     return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
+      isPolling = false;
+      clearInterval(pollInterval);
     };
   }, [adSpotId]);
 

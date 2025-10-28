@@ -34,18 +34,47 @@ export default function DevNewsAdSpot({ adSpotId, isPrime = false }: DevNewsAdSp
 
     fetchAdState();
 
-    // Listen for SSE updates
-    const eventSource = new EventSource(`/api/stream/${adSpotId}`);
+    // Poll for new events (using MongoDB polling instead of SSE)
+    let lastFetched: string | null = null;
+    let isPolling = true;
 
-    eventSource.addEventListener('ad_image_ready', (event) => {
-      const data = JSON.parse(event.data);
-      setAdData({
-        imageUrl: data.imageUrl,
-        winner: data.winner.agentId,
-      });
-    });
+    const pollEvents = async () => {
+      if (!isPolling) return;
 
-    return () => eventSource.close();
+      try {
+        const url = lastFetched
+          ? `/api/events/${encodeURIComponent(adSpotId)}?since=${encodeURIComponent(lastFetched)}`
+          : `/api/events/${encodeURIComponent(adSpotId)}`;
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success && result.events) {
+          // Look for ad_image_ready events
+          result.events.forEach((event: any) => {
+            if (event.type === 'ad_image_ready') {
+              setAdData({
+                imageUrl: event.imageUrl,
+                winner: event.winner?.agentId || event.agentId,
+              });
+            }
+          });
+
+          // Update timestamp for next poll
+          lastFetched = result.timestamp;
+        }
+      } catch (error) {
+        console.error('Error polling events:', error);
+      }
+    };
+
+    // Start polling every 2 seconds
+    const pollInterval = setInterval(pollEvents, 2000);
+
+    return () => {
+      isPolling = false;
+      clearInterval(pollInterval);
+    };
   }, [adSpotId]);
 
   if (loading) {

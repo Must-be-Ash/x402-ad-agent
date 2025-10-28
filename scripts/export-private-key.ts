@@ -8,12 +8,20 @@ async function exportPrivateKey() {
   try {
     console.log('🔑 Exporting private key for server wallet...');
     
+    // Get server wallet address from environment
+    const serverWalletAddress = process.env.ADDRESS;
+    if (!serverWalletAddress) {
+      throw new Error('ADDRESS not found in .env.local');
+    }
+    
+    console.log(`📍 Server wallet address: ${serverWalletAddress}`);
+    
     // Initialize CDP client
     const cdp = new CdpClient();
     
-    // Export private key using the wallet address
+    // Export private key using the wallet address from environment
     const privateKey = await cdp.evm.exportAccount({
-      address: '0x16CA9e69E97EF3E740f573E79b913183BF500C18'
+      address: serverWalletAddress as `0x${string}`
     });
     
     console.log('✅ Private key exported successfully!');

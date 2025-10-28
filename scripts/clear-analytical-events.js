@@ -1,8 +1,14 @@
 // Script to clear analyticalEvents collection
+require('dotenv').config({ path: '.env.local' });
 const { MongoClient } = require('mongodb');
 
-const uri = "mongodb+srv://arashnouruzi_db_user:KWNo7FFRyLlNogOC@agent-bid.1enlrcv.mongodb.net/?retryWrites=true&w=majority&appName=agent-bid";
-const dbName = "ad-bid";
+const uri = process.env.MONGODB_URI;
+const dbName = process.env.MONGODB_DB_NAME || "ad-bid";
+
+if (!uri) {
+  console.error('❌ MONGODB_URI not found in .env.local');
+  process.exit(1);
+}
 
 async function clearAnalyticalEvents() {
   const client = new MongoClient(uri);

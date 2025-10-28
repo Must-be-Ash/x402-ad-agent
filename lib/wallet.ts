@@ -38,9 +38,9 @@ export async function initializeWallet() {
   cdp = new CdpClient();
 
   // Get the existing server account by address (used for bid refunds)
-  const serverAddress = process.env.SERVER_WALLET_ADDRESS;
+  const serverAddress = process.env.ADDRESS;
   if (!serverAddress) {
-    throw new Error('SERVER_WALLET_ADDRESS not set in environment');
+    throw new Error('ADDRESS not set in environment');
   }
 
   serverAccount = await cdp.evm.getAccount({

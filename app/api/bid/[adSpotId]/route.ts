@@ -121,7 +121,7 @@ export async function POST(
             minAmountRequired: (minAmount * 1_000_000).toString(),
             maxAmountRequired: (maxAmount * 1_000_000).toString(),
             asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // USDC Base Sepolia
-            payTo: process.env.SERVER_WALLET_ADDRESS,
+            payTo: process.env.ADDRESS,
             resource: `${request.nextUrl.origin}/api/bid/${adSpotId}`,
             description: `Bid on ${adSpotId}`,
             mimeType: 'application/json',
@@ -160,7 +160,7 @@ export async function POST(
       network: 'base-sepolia' as const,
       maxAmountRequired: (parseBidAmount(requiredPrice) * 1_000_000).toString(),
       asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-      payTo: process.env.SERVER_WALLET_ADDRESS as `0x${string}`,
+      payTo: process.env.ADDRESS as `0x${string}`,
       resource: `${request.nextUrl.origin}/api/bid/${adSpotId}`,
       description: `Bid ${requiredPrice} USDC on ${adSpotId}`,
       mimeType: 'application/json',

@@ -13,12 +13,12 @@ import dotenv from 'dotenv';
 dotenv.config({ path: 'agents/.env' });
 
 const TEST_URL = 'https://developers.cloudflare.com/agents/x402/';
-const EZ402_ENDPOINT = 'https://x402-wrapper.vercel.app/api/x402/firecrawl_web_scraping_api_scrapes_single_pages_an';
+const FIRECRAWL_WRAPPED_ENDPOINT = process.env.FIRECRAWL_WRAPPED_ENDPOINT!;
 
 async function testFirecrawlScrape() {
   console.log('\n🧪 Testing ez402-wrapped Firecrawl endpoint\n');
   console.log(`📍 Target URL: ${TEST_URL}`);
-  console.log(`🔗 Ez402 endpoint: ${EZ402_ENDPOINT}\n`);
+  console.log(`🔗 Ez402 endpoint: ${FIRECRAWL_WRAPPED_ENDPOINT}\n`);
 
   // Setup wallet for x402 payments
   const privateKey = process.env.AGENT_A_PRIVATE_KEY as `0x${string}`;
@@ -43,7 +43,7 @@ async function testFirecrawlScrape() {
   try {
     console.log('💰 Making x402 payment and requesting scrape...\n');
 
-    const response = await axiosWithPayment.post(EZ402_ENDPOINT, {
+    const response = await axiosWithPayment.post(FIRECRAWL_WRAPPED_ENDPOINT, {
       url: TEST_URL,
       formats: ['markdown'],
       onlyMainContent: true,

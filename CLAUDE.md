@@ -16,7 +16,7 @@ This is an **autonomous AI bidding system** where intelligent agents compete for
    - Accepts bids via x402 payment protocol
    - Verifies and settles payments on-chain
    - Issues refunds to outbid agents
-   - Broadcasts real-time events via SSE
+   - Stores real-time events in MongoDB
    - Manages auction state in MongoDB
 
 2. **Intelligent Agents** (`agents/`)
@@ -26,7 +26,7 @@ This is an **autonomous AI bidding system** where intelligent agents compete for
    - Make strategic decisions based on auction context
 
 3. **Frontend Dashboard** (`app/auction/[basename]/`)
-   - Real-time SSE stream of auction events
+   - Real-time polling of auction events from MongoDB
    - Shows agent thinking, bids, and reflections
    - iMessage-style chat interface
 
@@ -76,8 +76,10 @@ npm run agent:ai:a
 # Terminal 3
 npm run agent:ai:b
 
-# Browser
-open http://localhost:3000/auction/x402agent.base.eth
+# Browser - Choose your UI:
+open http://localhost:3000/auction/x402agent.base.eth    # IceCo vs FizzUp auction
+open http://localhost:3000/analytical-agents              # CDP vs Crossmint competition
+open http://localhost:3000/devnews                        # Mock publisher site with ads
 ```
 
 ## Environment Setup
@@ -130,7 +132,7 @@ BASENAME_TO_AUCTION=x402agent.base.eth
   - Implements proposal negotiation (X-Proposed-Bid header)
   - Manages refunds to outbid agents
   - Uses settlement lock to prevent nonce conflicts
-  - Broadcasts SSE events for UI updates
+  - Stores events in MongoDB for frontend polling
 
 - **`lib/x402-config.ts`**: x402 configuration
   - Facilitator URL
@@ -144,14 +146,14 @@ BASENAME_TO_AUCTION=x402agent.base.eth
 
 ### Real-Time Events
 
-- **`lib/events.ts`**: SSE event broadcaster
-  - Central EventEmitter for all auction events
-  - Manages connections per basename
-  - Event types: `thinking`, `bid_placed`, `reflection`, `refund`, `withdrawal`, `auction_ended`
+- **`lib/events.ts`**: Event storage system
+  - Stores all auction events in MongoDB via `broadcastEvent()`
+  - Event types: `thinking`, `bid_placed`, `reflection`, `refund`, `withdrawal`, `auction_ended`, `ad_image_ready`, `image_generation_update`
 
-- **`app/api/stream/[basename]/route.ts`**: SSE endpoint
-  - Persistent connection for real-time updates
-  - Auto-reconnection via EventSource API
+- **`app/api/events/[adSpotId]/route.ts`**: Event polling endpoint
+  - Returns events from MongoDB
+  - Supports `?since=timestamp` parameter for incremental updates
+  - Frontend polls every 2 seconds for real-time updates
 
 ### Database
 
@@ -178,11 +180,26 @@ BASENAME_TO_AUCTION=x402agent.base.eth
 
 ### Frontend
 
-- **`app/auction/[basename]/page.tsx`**: Real-time auction UI
+- **`app/auction/[adSpotId]/page.tsx`**: Real-time auction UI
   - iMessage-style chat interface (grayscale)
   - Displays thinking bubbles, bid cards, reflections, refunds
-  - SSE integration for live updates
+  - Polls MongoDB every 2 seconds for live updates
   - Links to Basescan for transaction verification
+
+- **`app/analytical-agents/page.tsx`**: Analytical agent competition UI
+  - Terminal-style interface showing multiple agents
+  - Polls MongoDB for real-time event updates
+  - Displays scraping, analytics, and bidding activity
+
+- **`app/components/AdSpotDisplay.tsx`**: Ad spot display component
+  - Shows current winning ad image
+  - Polls for `ad_image_ready` events
+  - Used in auction page banner
+
+- **`app/components/DevNewsAdSpot.tsx`**: Mock publisher ad component
+  - Displays ads on DevNews mock site
+  - Polls for ad updates every 2 seconds
+  - Supports different ad spot sizes
 
 ### Additional Features
 
@@ -193,7 +210,7 @@ BASENAME_TO_AUCTION=x402agent.base.eth
 
 - **`app/api/bid/[basename]/reflection/route.ts`**: Post-bid analysis
   - Agents send reflection after bidding
-  - Stored in MongoDB and broadcast via SSE
+  - Stored in MongoDB for frontend polling
 
 ## Important Patterns
 
@@ -223,13 +240,15 @@ Agents propose bid amounts before payment:
 // Agent decides whether to proceed with payment
 ```
 
-### SSE Event Flow
+### Event Flow (MongoDB Polling)
 ```
-Agent thinks → broadcast 'thinking' → UI shows bubble
-Agent pays → broadcast 'bid_placed' → UI shows bid card (loading)
-Agent reflects → broadcast 'reflection' → UI updates bid card
-Server refunds → broadcast 'refund' → UI shows notification
+Agent thinks → store 'thinking' event → UI polls → UI shows bubble
+Agent pays → store 'bid_placed' event → UI polls → UI shows bid card (loading)
+Agent reflects → store 'reflection' event → UI polls → UI updates bid card
+Server refunds → store 'refund' event → UI polls → UI shows notification
 ```
+
+**Polling Frequency**: All frontend pages poll `/api/events/[adSpotId]` every 2 seconds for real-time updates.
 
 ## Blockchain Details
 
@@ -286,7 +305,7 @@ db.bidRecords.findOne({ basename: "x402agent.base.eth" })
 
 4. **Agent not re-bidding after refund**: Check balance monitoring loop (2s interval). Verify agent hasn't hit max bid limit.
 
-5. **SSE not streaming**: Check browser DevTools Network tab for persistent `text/event-stream` connection to `/api/stream/[basename]`.
+5. **Events not updating in UI**: Check browser DevTools Network tab for polling requests to `/api/events/[adSpotId]` every 2 seconds. Verify MongoDB connection and event storage.
 
 ## Withdrawal System
 
@@ -302,7 +321,7 @@ Agents can dynamically withdraw from auctions:
 - **`specs.md`**: Original technical specification (phase-by-phase implementation plan)
 - **`READY_TO_TEST.md`**: Testing guide and expected behavior
 - **`INTELLIGENT_AGENTS.md`**: AI agent architecture and strategies
-- **`STREAMING_GUIDE.md`**: SSE implementation details
+- **`STREAMING_GUIDE.md`**: Real-time event polling implementation details
 - **`WITHDRAWAL_SYSTEM.md`**: Dynamic auction ending via agent withdrawal
 
 ## Tech Stack
@@ -312,7 +331,7 @@ Agents can dynamically withdraw from auctions:
 - **Payments**: x402 protocol (x402-axios, x402-hono)
 - **AI**: LlamaIndex, Anthropic Claude 3.5 Sonnet
 - **Database**: MongoDB Atlas
-- **Real-time**: Server-Sent Events (SSE)
+- **Real-time**: MongoDB Polling (2-second intervals)
 - **Styling**: Tailwind CSS 4
 
 ## Notes for Future Development
