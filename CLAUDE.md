@@ -17,7 +17,7 @@ This is an **autonomous AI bidding system** where intelligent agents compete for
    - Verifies and settles payments on-chain
    - Issues refunds to outbid agents
    - Broadcasts real-time events via SSE
-   - Manages auction state in MongoDB
+   - Manages auction state in-memory
 
 2. **Intelligent Agents** (`agents/`)
    - Autonomous bidding agents powered by Claude AI
@@ -52,17 +52,14 @@ npm run lint             # ESLint
 
 ### Agents
 ```bash
-npm run agent:a          # Start simple Agent A
-npm run agent:b          # Start simple Agent B
-npm run agent:ai:a       # Start intelligent Agent A (requires ANTHROPIC_API_KEY)
-npm run agent:ai:b       # Start intelligent Agent B (requires ANTHROPIC_API_KEY)
+npm run agent:ai:a       # Start intelligent Agent A (IceCo)
+npm run agent:ai:b       # Start intelligent Agent B (FizzUp)
 ```
 
 ### Wallet Management
 ```bash
-npm run fund             # Fund server wallet with ETH/USDC
 npm run fund:agents      # Fund agent wallets with USDC
-tsx export-private-key.ts   # Export private key from CDP wallet
+npm run check:server     # Check server wallet balance
 ```
 
 ### Testing Workflow
@@ -84,13 +81,9 @@ open http://localhost:3000/auction/x402agent.base.eth
 
 ### Server (`.env.local`)
 ```bash
-# CDP Server Wallet
-CDP_API_KEY_ID=...
-CDP_API_KEY_SECRET=...
-CDP_WALLET_SECRET=...
-
-# MongoDB
-MONGODB_URI=mongodb+srv://...
+# Server Wallet
+SERVER_WALLET_PRIVATE_KEY=0x...
+SERVER_WALLET_ADDRESS=0x...
 
 # Auction Config
 AUCTION_DURATION_MINUTES=5
@@ -101,16 +94,20 @@ BID_INCREMENT_USDC=1
 FACILITATOR_URL=https://x402.org/facilitator
 ```
 
-### Agents (`agents/.env`)
+### Agents (`.env`)
 ```bash
-# Agent A
-AGENT_A_PRIVATE_KEY=0x...
-AGENT_A_NAME=AgentA
+# Agent A - CDP Wallet Configuration
+CDP_API_KEY_ID=your-api-key-id
+CDP_API_KEY_SECRET=your-api-key-secret
+CDP_WALLET_SECRET=your-wallet-secret
+AGENT_A_CDP_WALLET_ID=agent-1234567890  # Optional - creates new if not provided
+AGENT_A_NAME=IceCo
 AGENT_A_MAX_BID=10
 
-# Agent B
-AGENT_B_PRIVATE_KEY=0x...
-AGENT_B_NAME=AgentB
+# Agent B - Crossmint Wallet Configuration
+AGENT_B_CROSSMINT_API_KEY=sk_staging_...
+AGENT_B_CROSSMINT_WALLET_LOCATOR=email:user@example.com:evm:smart
+AGENT_B_NAME=FizzUp
 AGENT_B_MAX_BID=15
 
 # Anthropic (note the BID_ prefix to avoid conflicts)
@@ -118,7 +115,7 @@ BID_ANTHROPIC_API_KEY=sk-ant-...
 
 # Server
 BID_SERVER_URL=http://localhost:3000
-BASENAME_TO_AUCTION=x402agent.base.eth
+AD_SPOT_ID=demo-spot-1
 ```
 
 ## Key Files & Architecture
@@ -137,8 +134,8 @@ BASENAME_TO_AUCTION=x402agent.base.eth
   - Bid price calculation logic
   - Base Sepolia USDC address
 
-- **`lib/wallet.ts`**: CDP Server Wallet integration
-  - Initializes persistent CDP wallet
+- **`lib/wallet.ts`**: Server Wallet management
+  - Manages server wallet for settlements and refunds
   - Sends USDC refunds via ERC-20 transfers
   - Settlement lock management
 
@@ -155,9 +152,10 @@ BASENAME_TO_AUCTION=x402agent.base.eth
 
 ### Database
 
-- **`lib/db.ts`**: MongoDB operations
-  - `getBidRecord()`, `updateBidRecord()`, `addBidToHistory()`
-  - Stores bid history, agent state, auction status
+- **`lib/db.ts`**: In-memory storage operations
+  - `getAdSpotRecord()`, `updateAdSpotRecord()`, `addBidToHistory()`
+  - Stores bid history, agent state, auction status in-memory
+  - Simple Map-based storage for demo purposes
 
 - **`types/index.ts`**: TypeScript interfaces
   - `BidRecord`: Complete auction state
@@ -193,7 +191,7 @@ BASENAME_TO_AUCTION=x402agent.base.eth
 
 - **`app/api/bid/[basename]/reflection/route.ts`**: Post-bid analysis
   - Agents send reflection after bidding
-  - Stored in MongoDB and broadcast via SSE
+  - Stored in-memory and broadcast via SSE
 
 ## Important Patterns
 
@@ -270,12 +268,6 @@ open https://sepolia.basescan.org/address/[AGENT_WALLET_ADDRESS]
 open https://sepolia.basescan.org/tx/[TX_HASH]
 ```
 
-### MongoDB Queries
-```javascript
-// View current auction state
-db.bidRecords.findOne({ basename: "x402agent.base.eth" })
-```
-
 ### Common Issues
 
 1. **"Replacement transaction underpriced"**: Settlement lock prevents this, but if it happens, agents are bidding too fast. The lock will queue them.
@@ -297,28 +289,18 @@ Agents can dynamically withdraw from auctions:
 - Server issues USDC refund
 - If only 1 active bidder remains → auction ends
 
-## Documentation Files
-
-- **`specs.md`**: Original technical specification (phase-by-phase implementation plan)
-- **`READY_TO_TEST.md`**: Testing guide and expected behavior
-- **`INTELLIGENT_AGENTS.md`**: AI agent architecture and strategies
-- **`STREAMING_GUIDE.md`**: SSE implementation details
-- **`WITHDRAWAL_SYSTEM.md`**: Dynamic auction ending via agent withdrawal
-
 ## Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
-- **Blockchain**: Coinbase CDP SDK, viem, wagmi
+- **Blockchain**: viem, wagmi
 - **Payments**: x402 protocol (x402-axios, x402-hono)
 - **AI**: LlamaIndex, Anthropic Claude 3.5 Sonnet
-- **Database**: MongoDB Atlas
+- **Storage**: In-memory (Map-based)
 - **Real-time**: Server-Sent Events (SSE)
 - **Styling**: Tailwind CSS 4
 
 ## Notes for Future Development
 
-- Basename transfer to winner (Base Mainnet) is specified but not yet implemented
 - Consider rate limiting on bid endpoint for production
-- MongoDB indexes recommended for performance at scale
-- Current system uses simple agents vs intelligent agents - intelligent agents provide strategic decision-making
 - The settlement lock is in-memory; for multi-instance deployments, use Redis or similar
+- For production, consider persistent storage (database) instead of in-memory

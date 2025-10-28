@@ -1,30 +1,44 @@
+/**
+ * Intelligent Agent B - Crossmint Wallet Integration Demo
+ *
+ * Demonstrates AI-powered bidding agent using Crossmint custodial wallet.
+ * Showcases email-based wallet creation, seamless Web3 onboarding, and x402 payment integration.
+ *
+ * Wallet: Crossmint Custodial Wallet
+ * Features: Email-based authentication, custodial security, enterprise-ready
+ *
+ * Usage: npm run agent:ai:b
+ */
+
 import { IntelligentBiddingAgent } from './shared/intelligent-agent';
 import dotenv from 'dotenv';
-import { Hex } from 'viem';
 
-dotenv.config({ path: 'agents/.env' });
+// Load environment variables from root .env file
+dotenv.config({ path: '.env' });
 
 const agentB = new IntelligentBiddingAgent({
-  privateKey: process.env.AGENT_B_PRIVATE_KEY as Hex,
-  agentName: process.env.AGENT_B_NAME || 'FizzUp',
+  walletType: 'crossmint',
+  crossmintApiKey: process.env.AGENT_B_CROSSMINT_API_KEY || '',
+  crossmintWalletLocator: process.env.AGENT_B_CROSSMINT_WALLET_LOCATOR || '',
+  agentName: process.env.AGENT_B_NAME || 'Crossmint Agent',
   maxBid: parseFloat(process.env.AGENT_B_MAX_BID || '15'),
   serverUrl: process.env.BID_SERVER_URL || 'http://localhost:3000',
   anthropicApiKey: process.env.BID_ANTHROPIC_API_KEY || '',
   brandIdentity: {
-    brandName: 'FizzUp',
-    productName: 'FizzUp Energy Soda',
-    industry: 'Beverage - Energy Soda & Drinks',
-    productDescription: 'Bold-flavored energy soda packed with B-vitamins, natural caffeine, and electrolytes for sustained energy',
-    targetAudience: 'Active young adults (18-30), gamers, students, night shift workers, anyone needing an energy boost',
-    brandPersonality: 'Bold, energetic, vibrant, rebellious, fun, unapologetic, high-energy',
-    marketingAngle: 'Unleash Your Energy - Bold flavors that fuel your unstoppable life',
-    visualStyle: 'Bright electric colors (neon blue, electric green, vibrant orange, hot pink), dynamic action shots, explosive energy visuals, youth culture imagery, dramatic lighting with neon glow effects, motion and movement',
+    brandName: 'Crossmint Agent',
+    productName: 'Crossmint Custodial Wallets',
+    industry: 'Blockchain Wallet Infrastructure',
+    productDescription: 'Enterprise custodial wallet solution with email-based authentication and seamless Web3 onboarding for mainstream adoption',
+    targetAudience: 'Developers building agent-to-agent payment systems and autonomous blockchain applications',
+    brandPersonality: 'Accessible, secure, enterprise-grade, user-focused, innovative',
+    marketingAngle: 'Simplify Web3 payments with enterprise custodial wallets and seamless integration',
+    visualStyle: 'Clean, modern, Crossmint green branding, approachable developer aesthetic, vibrant fintech design',
     keyMessages: [
-      'Explosive energy boost',
-      'Bold unique flavors',
-      'Vitamins + Natural caffeine',
-      'Fuel your passion',
-      'Stay unstoppable'
+      'Email-based wallet creation',
+      'Custodial security',
+      'x402 payment integration',
+      'Seamless Web3 onboarding',
+      'Enterprise-ready solution'
     ]
   }
 });

@@ -23,7 +23,7 @@ export default function DevNewsAdSpot({ adSpotId, isPrime = false }: DevNewsAdSp
         const data = await response.json();
 
         setAdData({
-          imageUrl: data.winnerAdImage?.url,
+          imageUrl: data.winnerAdImage, // winnerAdImage is a string URL, not an object
           winner: data.currentWinner?.agentId,
         });
       } catch (error) {
@@ -41,7 +41,7 @@ export default function DevNewsAdSpot({ adSpotId, isPrime = false }: DevNewsAdSp
       const data = JSON.parse(event.data);
       setAdData({
         imageUrl: data.imageUrl,
-        winner: data.winner.agentId,
+        winner: data.winner?.agentId || data.winner,
       });
     });
 

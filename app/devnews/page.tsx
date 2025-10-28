@@ -5,10 +5,48 @@ import Link from 'next/link';
 export default function DevNewsPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <main id="main-content">
+        {/* Demo Site Banner */}
+        <div className="w-full bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-b border-blue-700/30 py-3" role="banner" aria-label="Demo site notification">
+        <div className="container mx-auto px-4 max-w-7xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <svg className="w-5 h-5 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <span className="text-gray-300">
+                <strong className="text-white">Demo Site:</strong> See x402 ad auctions in action
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Link
+                href="/auction/prime-banner"
+                className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-colors"
+              >
+                View Auction
+              </Link>
+              <Link
+                href="/"
+                className="px-4 py-1.5 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#444] text-gray-300 text-sm font-medium rounded transition-colors"
+              >
+                Learn More
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Prime Banner Ad Spot */}
       <div className="w-full bg-[#000] border-b border-[#222] py-4">
         <div className="container mx-auto px-4 max-w-7xl">
-          <DevNewsAdSpot adSpotId="prime-banner" isPrime={true} />
+          <Link href="/auction/prime-banner" className="block group relative">
+            <DevNewsAdSpot adSpotId="prime-banner" isPrime={true} />
+            <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/10 transition-colors rounded flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <div className="px-4 py-2 bg-black/80 rounded text-sm font-medium">
+                Click to see auction →
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 
@@ -249,30 +287,41 @@ export default function DevNewsPage() {
 
             {/* Secondary Ad Spot */}
             <div className="mt-8">
-              <DevNewsAdSpot adSpotId="sidebar-secondary" isPrime={false} />
+              <Link href="/auction/sidebar-secondary" className="block group relative">
+                <DevNewsAdSpot adSpotId="sidebar-secondary" isPrime={false} />
+                <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/10 transition-colors rounded flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <div className="px-3 py-1.5 bg-black/80 rounded text-xs font-medium">
+                    View auction →
+                  </div>
+                </div>
+              </Link>
             </div>
           </aside>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[#222] py-8 mt-16 bg-[#000]">
+      <footer className="border-t border-[#222] py-8 mt-16 bg-[#000]" role="contentinfo">
         <div className="container mx-auto px-4 max-w-7xl">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-sm text-[#666]">
-              &copy; 2025 DevNews. All rights reserved.
+              &copy; 2025 DevNews. Demo site for x402 protocol.
             </div>
-            <div className="flex gap-4 text-xs text-[#888]">
-              <Link href="/api/site-analytics" className="hover:text-white transition-colors">
-                Site Analytics API
+            <nav aria-label="Footer navigation" className="flex gap-4 text-xs text-[#888]">
+              <Link href="/" className="hover:text-white transition-colors">
+                About x402
               </Link>
-              <Link href="/analytical-agents" className="hover:text-white transition-colors">
-                🤖 See Agents in Action
+              <Link href="/auction/demo-spot-1" className="hover:text-white transition-colors">
+                Live Auctions
               </Link>
-            </div>
+              <Link href="/docs" className="hover:text-white transition-colors">
+                Developer Docs
+              </Link>
+            </nav>
           </div>
         </div>
       </footer>
+      </main>
     </div>
   );
 }

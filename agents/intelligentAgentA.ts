@@ -1,30 +1,43 @@
+/**
+ * Intelligent Agent A - CDP Wallet Integration Demo
+ *
+ * Demonstrates AI-powered bidding agent using Coinbase Developer Platform (CDP) wallet.
+ * Showcases gasless transactions, smart wallet features, and x402 payment integration.
+ *
+ * Wallet: Coinbase Developer Platform (CDP)
+ * Features: Gasless transactions via paymaster, smart accounts, enterprise-ready
+ *
+ * Usage: npm run agent:ai:a
+ */
+
 import { IntelligentBiddingAgent } from './shared/intelligent-agent';
 import dotenv from 'dotenv';
-import { Hex } from 'viem';
 
-dotenv.config({ path: 'agents/.env' });
+// Load environment variables from root .env file
+dotenv.config({ path: '.env' });
 
 const agentA = new IntelligentBiddingAgent({
-  privateKey: process.env.AGENT_A_PRIVATE_KEY as Hex,
-  agentName: process.env.AGENT_A_NAME || 'IceCo',
+  walletType: 'cdp',
+  cdpWalletId: process.env.AGENT_A_CDP_WALLET_ID, // Optional - will create new wallet if not provided
+  agentName: process.env.AGENT_A_NAME || 'CDP Agent',
   maxBid: parseFloat(process.env.AGENT_A_MAX_BID || '10'),
   serverUrl: process.env.BID_SERVER_URL || 'http://localhost:3000',
   anthropicApiKey: process.env.BID_ANTHROPIC_API_KEY || '',
   brandIdentity: {
-    brandName: 'IceCo',
-    productName: 'CrystalPure Premium Water',
-    industry: 'Beverage - Premium Water & Ice',
-    productDescription: 'Ultra-pure bottled water sourced from pristine glacial springs, infused with natural minerals',
-    targetAudience: 'Health-conscious millennials and Gen-Z, fitness enthusiasts, wellness seekers, premium lifestyle consumers',
-    brandPersonality: 'Pure, elegant, minimalist, sophisticated, wellness-focused, premium',
-    marketingAngle: 'Purity meets perfection - Experience crystal-clear refreshment from nature\'s purest sources',
-    visualStyle: 'Cool color palette (blues, whites, silver, ice tones), minimalist composition, clean lines, pristine natural imagery (glaciers, mountain springs, clear water), professional product photography, bright natural lighting',
+    brandName: 'CDP Agent',
+    productName: 'Coinbase Developer Platform',
+    industry: 'Blockchain Wallet Infrastructure',
+    productDescription: 'Enterprise-grade smart wallet platform with gasless transactions and developer-friendly APIs for building autonomous payment systems',
+    targetAudience: 'Developers building agent-to-agent payment systems and autonomous blockchain applications',
+    brandPersonality: 'Reliable, innovative, developer-focused, professional, cutting-edge',
+    marketingAngle: 'Build the future of autonomous payments with enterprise-grade wallet infrastructure',
+    visualStyle: 'Clean, technical, Coinbase blue branding, professional developer aesthetic, modern fintech design',
     keyMessages: [
-      'Sourced from glacial springs',
-      'Ultra-pure and natural',
-      'Premium hydration',
-      'Wellness lifestyle',
-      'Sustainable packaging'
+      'Gasless transactions via paymaster',
+      'Smart wallet accounts',
+      'x402 payment integration',
+      'Enterprise-ready infrastructure',
+      'Developer-friendly APIs'
     ]
   }
 });
