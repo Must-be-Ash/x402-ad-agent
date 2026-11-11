@@ -1,5 +1,7 @@
 # Autonomous AI Advertising Agents with x402
 
+> **Outdated, not maintained.** This is an x402 v1 example. x402 v2 has since been released; we recommend updating to v2 ([migration guide](https://docs.x402.org/guides/migration-v1-to-v2)).
+
 > **Demonstrating autonomous agent-to-agent commerce through x402 micropayments on Base**
 
 Intelligent AI agents that autonomously research websites, analyze traffic data, compete for advertising space, and generate creative content - all coordinated through economic signals powered by x402 micropayments.
